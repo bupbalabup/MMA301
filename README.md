@@ -9,3 +9,11 @@
 - Gym App
 - Bán hàng
 - Chat App
+
+### Danh sách thành viên:
+| MSSV | Họ Tên |
+|------|------|
+| HE176254 | Nguyễn Thế Hữu |
+| HE180536 | Đặng Trung Hiếu |
+| HE182166 | Đinh Quốc Vương |
+| HE194925 | Bùi Ngọc Đạt |
