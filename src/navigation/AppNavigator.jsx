@@ -1,7 +1,12 @@
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  DarkTheme,
+  DefaultTheme,
+  NavigationContainer,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import AIModeScreen from '../screens/AIModeScreen';
 import LoadingScreen from '../screens/LoadingScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -16,14 +21,39 @@ const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
   const { loading } = useAuth();
+  const { colors, mode } = useTheme();
+  const baseNavigationTheme = mode === 'dark' ? DarkTheme : DefaultTheme;
+  const navigationTheme = {
+    ...baseNavigationTheme,
+    colors: {
+      ...baseNavigationTheme.colors,
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.surface,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.secondary,
+    },
+  };
 
   if (loading) {
     return <SplashScreen />;
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="MainTabs">
+    <NavigationContainer theme={navigationTheme}>
+      <Stack.Navigator
+        initialRouteName="MainTabs"
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: colors.surface,
+          },
+          headerTintColor: colors.text,
+          headerTitleStyle: {
+            color: colors.text,
+          },
+        }}
+      >
         <Stack.Screen
           name="Splash"
           component={SplashScreen}
