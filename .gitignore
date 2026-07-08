@@ -1,0 +1,54 @@
+# Node / npm
+node_modules/
+
+# Keep package-lock.json committed for reproducible npm installs.
+
+# Expo / React Native
+.expo/
+.expo-shared/
+web-build/
+dist/
+android/
+ios/
+
+# Metro / cache
+.metro-cache/
+babel-cache/
+.expo-export-check/
+
+# Environment variables
+.env
+.env.*
+*.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+firebase-debug.log*
+
+# Firebase secrets
+serviceAccountKey.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local tool caches
+.pnpm-store/
+.expo-home/
+.tool-home/
+.tool-bin/
+
+.github/
+.prompts/
+.agent/
+
+AI_MEMORY/
+docs/
+google-services.json
+package-lock.json
+
