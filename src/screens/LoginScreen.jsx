@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableWithoutFeedback,
   View,
+  Pressable,
 } from 'react-native';
 import {
   createUserWithEmailAndPassword,
@@ -29,6 +30,7 @@ function showToast(type, message) {
 
 export default function LoginScreen({ navigation }) {
   const { colors } = useTheme();
+  const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -102,39 +104,49 @@ export default function LoginScreen({ navigation }) {
     }
   }
 
+  function toggleMode() {
+    setMessage('');
+    setIsError(false);
+    setIsRegister((currentMode) => !currentMode);
+  }
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.wrapper}>
         <AppContainer>
           <View style={styles.inner}>
             <View style={styles.header}>
-              <AppText variant="heading">Login / Register</AppText>
+              <AppText variant="heading">
+                {isRegister ? 'Register' : 'Login'}
+              </AppText>
               <AppText variant="body" style={{ color: colors.textSecondary }}>
                 Sign in to save your analyses and use favourites.
               </AppText>
             </View>
 
             <View style={styles.form}>
-              <View style={styles.field}>
-                <AppText variant="caption" style={styles.label}>
-                  Name
-                </AppText>
-                <TextInput
-                  autoCapitalize="words"
-                  onChangeText={setName}
-                  placeholder="Enter your name"
-                  placeholderTextColor={colors.textSecondary}
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                      color: colors.text,
-                    },
-                  ]}
-                  value={name}
-                />
-              </View>
+              {isRegister ? (
+                <View style={styles.field}>
+                  <AppText variant="caption" style={styles.label}>
+                    Name
+                  </AppText>
+                  <TextInput
+                    autoCapitalize="words"
+                    onChangeText={setName}
+                    placeholder="Enter your name"
+                    placeholderTextColor={colors.textSecondary}
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      },
+                    ]}
+                    value={name}
+                  />
+                </View>
+              ) : null}
 
               <View style={styles.field}>
                 <AppText variant="caption" style={styles.label}>
@@ -179,26 +191,28 @@ export default function LoginScreen({ navigation }) {
                 />
               </View>
 
-              <View style={styles.field}>
-                <AppText variant="caption" style={styles.label}>
-                  Confirm Password
-                </AppText>
-                <TextInput
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm your password"
-                  placeholderTextColor={colors.textSecondary}
-                  secureTextEntry
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                      color: colors.text,
-                    },
-                  ]}
-                  value={confirmPassword}
-                />
-              </View>
+              {isRegister ? (
+                <View style={styles.field}>
+                  <AppText variant="caption" style={styles.label}>
+                    Confirm Password
+                  </AppText>
+                  <TextInput
+                    onChangeText={setConfirmPassword}
+                    placeholder="Confirm your password"
+                    placeholderTextColor={colors.textSecondary}
+                    secureTextEntry
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        color: colors.text,
+                      },
+                    ]}
+                    value={confirmPassword}
+                  />
+                </View>
+              ) : null}
             </View>
 
             {message ? (
@@ -211,8 +225,20 @@ export default function LoginScreen({ navigation }) {
             ) : null}
 
             <View style={styles.actions}>
-              <AppButton title="Login" onPress={handleLogin} />
-              <AppButton title="Register" onPress={handleRegister} />
+              <AppButton
+                title={isRegister ? 'Register' : 'Login'}
+                onPress={isRegister ? handleRegister : handleLogin}
+              />
+              <Pressable onPress={toggleMode} style={styles.toggle}>
+                <AppText
+                  variant="caption"
+                  style={{ color: colors.primary, textAlign: 'center' }}
+                >
+                  {isRegister
+                    ? 'Already have an account? Login'
+                    : "Don't have an account? Register"}
+                </AppText>
+              </Pressable>
             </View>
           </View>
         </AppContainer>
@@ -250,5 +276,8 @@ const styles = StyleSheet.create({
   },
   actions: {
     gap: 12,
+  },
+  toggle: {
+    paddingVertical: 4,
   },
 });
