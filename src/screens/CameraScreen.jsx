@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import Toast from 'react-native-toast-message';
 
 import AppButton from '../components/AppButton';
 import AppCard from '../components/AppCard';
@@ -19,6 +20,15 @@ export default function CameraScreen({ navigation }) {
     navigation.navigate('Login');
   }
 
+  function showMessage(nextMessage) {
+    setMessage(nextMessage);
+    Toast.show({
+      type: 'info',
+      text1: nextMessage,
+      visibilityTime: 3000,
+    });
+  }
+
   function handleTakePhoto() {
     if (!user) {
       requireLogin();
@@ -34,32 +44,39 @@ export default function CameraScreen({ navigation }) {
       return;
     }
 
-    setMessage('');
-    const result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.8,
-    });
+    try {
+      setMessage('');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.8,
+      });
 
-    if (result.canceled || !result.assets?.[0]?.uri) {
-      return;
+      if (result.canceled || !result.assets?.[0]?.uri) {
+        showMessage('No image selected');
+        return;
+      }
+
+      const compressedImage = await manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 400 } }],
+        {
+          base64: true,
+          compress: 0.6,
+          format: SaveFormat.JPEG,
+        },
+      );
+
+      if (!compressedImage.base64) {
+        showMessage('No image selected');
+        return;
+      }
+
+      navigation.navigate('Loading', {
+        imageBase64: compressedImage.base64,
+      });
+    } catch (error) {
+      console.error('Gallery selection failed:', error);
+      showMessage(error?.message || 'Unable to select image');
     }
-
-    const compressedImage = await manipulateAsync(
-      result.assets[0].uri,
-      [{ resize: { width: 400 } }],
-      {
-        base64: true,
-        compress: 0.6,
-        format: SaveFormat.JPEG,
-      },
-    );
-
-    if (!compressedImage.base64) {
-      return;
-    }
-
-    navigation.navigate('Loading', {
-      imageBase64: compressedImage.base64,
-    });
   }
 
   return (
