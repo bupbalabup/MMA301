@@ -1,5 +1,5 @@
 const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 const SYSTEM_INSTRUCTION = `
 You are an expert Vietnamese interior design consultant.
@@ -221,7 +221,11 @@ async function callGeminiApi(imageBase64, prompt) {
   });
 
   if (!response.ok) {
-    throw new Error('Gemini API request failed.');
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(
+      errorBody?.error?.message
+        || `Gemini API request failed (${response.status})`,
+    );
   }
 
   const data = await response.json();
@@ -332,7 +336,14 @@ export async function analyzeRoom(imageBase64, mode, style, personalization) {
     try {
       return await requestAnalysis(imageBase64, prompt);
     } catch (retryError) {
-      throw new Error('Không thể phân tích căn phòng. Vui lòng thử lại.');
+      console.error('Gemini error:', retryError);
+      throw new Error(
+        retryError?.response?.data?.error?.message
+          || retryError.message
+          || error?.response?.data?.error?.message
+          || error.message
+          || 'Gemini request failed',
+      );
     }
   }
 }

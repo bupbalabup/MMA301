@@ -1,30 +1,54 @@
 import { useState } from 'react';
 import {
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableWithoutFeedback,
   View,
-  Pressable,
 } from 'react-native';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   updateProfile,
 } from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+} from 'firebase/firestore';
 import Toast from 'react-native-toast-message';
 
 import AppButton from '../components/AppButton';
 import AppContainer from '../components/AppContainer';
 import AppText from '../components/AppText';
 import { useTheme } from '../context/ThemeContext';
-import { auth } from '../firebase/firebaseConfig';
+import { auth, db } from '../firebase/firebaseConfig';
 
 function showToast(type, message) {
   Toast.show({
     type,
     text1: message,
     visibilityTime: 3000,
+  });
+}
+
+async function ensureUserDocument(user, displayName) {
+  const userRef = doc(db, 'users', user.uid);
+  const userDoc = await getDoc(userRef);
+
+  if (userDoc.exists()) {
+    return;
+  }
+
+  await setDoc(userRef, {
+    displayName: displayName || user.displayName || '',
+    email: user.email || '',
+    createdAt: serverTimestamp(),
   });
 }
 
@@ -66,7 +90,12 @@ export default function LoginScreen({ navigation }) {
 
     try {
       setMessage('');
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password,
+      );
+      await ensureUserDocument(credential.user);
       setFeedback('Login successful.');
       closeLogin();
     } catch (error) {
@@ -96,6 +125,11 @@ export default function LoginScreen({ navigation }) {
       await updateProfile(credential.user, {
         displayName: name.trim(),
       });
+      await setDoc(doc(db, 'users', credential.user.uid), {
+        displayName: name.trim(),
+        email: email.trim(),
+        createdAt: serverTimestamp(),
+      });
       setFeedback('Register successful.');
       closeLogin();
     } catch (error) {
@@ -111,145 +145,158 @@ export default function LoginScreen({ navigation }) {
   }
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.wrapper}>
-        <AppContainer>
-          <View style={styles.inner}>
-            <View style={styles.header}>
-              <AppText variant="heading">
-                {isRegister ? 'Register' : 'Login'}
-              </AppText>
-              <AppText variant="body" style={{ color: colors.textSecondary }}>
-                Sign in to save your analyses and use favourites.
-              </AppText>
-            </View>
-
-            <View style={styles.form}>
-              {isRegister ? (
-                <View style={styles.field}>
-                  <AppText variant="caption" style={styles.label}>
-                    Name
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.wrapper}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.wrapper}>
+            <AppContainer>
+              <View style={styles.inner}>
+                <View style={styles.header}>
+                  <AppText variant="heading">
+                    {isRegister ? 'Register' : 'Login'}
                   </AppText>
-                  <TextInput
-                    autoCapitalize="words"
-                    onChangeText={setName}
-                    placeholder="Enter your name"
-                    placeholderTextColor={colors.textSecondary}
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
-                    value={name}
-                  />
-                </View>
-              ) : null}
-
-              <View style={styles.field}>
-                <AppText variant="caption" style={styles.label}>
-                  Email
-                </AppText>
-                <TextInput
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  onChangeText={setEmail}
-                  placeholder="Enter your email"
-                  placeholderTextColor={colors.textSecondary}
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                      color: colors.text,
-                    },
-                  ]}
-                  value={email}
-                />
-              </View>
-
-              <View style={styles.field}>
-                <AppText variant="caption" style={styles.label}>
-                  Password
-                </AppText>
-                <TextInput
-                  onChangeText={setPassword}
-                  placeholder="Enter your password"
-                  placeholderTextColor={colors.textSecondary}
-                  secureTextEntry
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                      color: colors.text,
-                    },
-                  ]}
-                  value={password}
-                />
-              </View>
-
-              {isRegister ? (
-                <View style={styles.field}>
-                  <AppText variant="caption" style={styles.label}>
-                    Confirm Password
+                  <AppText variant="body" style={{ color: colors.textSecondary }}>
+                    Sign in to save your analyses and use favourites.
                   </AppText>
-                  <TextInput
-                    onChangeText={setConfirmPassword}
-                    placeholder="Confirm your password"
-                    placeholderTextColor={colors.textSecondary}
-                    secureTextEntry
-                    style={[
-                      styles.input,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                        color: colors.text,
-                      },
-                    ]}
-                    value={confirmPassword}
-                  />
                 </View>
-              ) : null}
-            </View>
 
-            {message ? (
-              <AppText
-                variant="caption"
-                style={{ color: isError ? colors.danger : colors.success }}
-              >
-                {message}
-              </AppText>
-            ) : null}
+                <View style={styles.form}>
+                  {isRegister && (
+                    <View style={styles.field}>
+                      <AppText variant="caption" style={styles.label}>
+                        Name
+                      </AppText>
+                      <TextInput
+                        autoCapitalize="words"
+                        onChangeText={setName}
+                        placeholder="Enter your name"
+                        placeholderTextColor={colors.textSecondary}
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: colors.border,
+                            color: colors.text,
+                          },
+                        ]}
+                        value={name}
+                      />
+                    </View>
+                  )}
 
-            <View style={styles.actions}>
-              <AppButton
-                title={isRegister ? 'Register' : 'Login'}
-                onPress={isRegister ? handleRegister : handleLogin}
-              />
-              <Pressable onPress={toggleMode} style={styles.toggle}>
-                <AppText
-                  variant="caption"
-                  style={{ color: colors.primary, textAlign: 'center' }}
-                >
-                  {isRegister
-                    ? 'Already have an account? Login'
-                    : "Don't have an account? Register"}
-                </AppText>
-              </Pressable>
-            </View>
+                  <View style={styles.field}>
+                    <AppText variant="caption" style={styles.label}>
+                      Email
+                    </AppText>
+                    <TextInput
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      onChangeText={setEmail}
+                      placeholder="Enter your email"
+                      placeholderTextColor={colors.textSecondary}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
+                      value={email}
+                    />
+                  </View>
+
+                  <View style={styles.field}>
+                    <AppText variant="caption" style={styles.label}>
+                      Password
+                    </AppText>
+                    <TextInput
+                      onChangeText={setPassword}
+                      placeholder="Enter your password"
+                      placeholderTextColor={colors.textSecondary}
+                      secureTextEntry
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
+                      value={password}
+                    />
+                  </View>
+
+                  {isRegister && (
+                    <View style={styles.field}>
+                      <AppText variant="caption" style={styles.label}>
+                        Confirm Password
+                      </AppText>
+                      <TextInput
+                        onChangeText={setConfirmPassword}
+                        placeholder="Confirm your password"
+                        placeholderTextColor={colors.textSecondary}
+                        secureTextEntry
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: colors.border,
+                            color: colors.text,
+                          },
+                        ]}
+                        value={confirmPassword}
+                      />
+                    </View>
+                  )}
+                </View>
+
+                {message && (
+                  <AppText
+                    variant="caption"
+                    style={{ color: isError ? colors.danger : colors.success }}
+                  >
+                    {message}
+                  </AppText>
+                )}
+
+                <View style={styles.actions}>
+                  <AppButton
+                    title={isRegister ? 'Register' : 'Login'}
+                    onPress={isRegister ? handleRegister : handleLogin}
+                  />
+                  <Pressable onPress={toggleMode} style={styles.toggle}>
+                    <AppText
+                      variant="caption"
+                      style={{ color: colors.primary, textAlign: 'center' }}
+                    >
+                      {isRegister
+                        ? 'Already have an account? Login'
+                        : "Don't have an account? Register"}
+                    </AppText>
+                  </Pressable>
+                </View>
+              </View>
+            </AppContainer>
           </View>
-        </AppContainer>
-      </View>
-    </TouchableWithoutFeedback>
+        </TouchableWithoutFeedback>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   inner: {
     flex: 1,

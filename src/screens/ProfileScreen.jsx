@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { signOut } from 'firebase/auth';
+import Toast from 'react-native-toast-message';
 
 import AppButton from '../components/AppButton';
 import AppCard from '../components/AppCard';
@@ -13,19 +13,18 @@ import { auth } from '../firebase/firebaseConfig';
 export default function ProfileScreen({ navigation }) {
   const { user } = useAuth();
   const { colors, spacing, mode, toggleTheme } = useTheme();
-  const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
   const email = user?.email || 'Not logged in';
 
   async function handleLogout() {
     try {
-      setMessage('');
       await signOut(auth);
-      setMessage('Logout successful.');
-      setIsError(false);
     } catch (error) {
-      setMessage('Logout failed. Please try again.');
-      setIsError(true);
+      console.error('Logout failed:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Logout failed. Please try again.',
+        visibilityTime: 3000,
+      });
     }
   }
 
@@ -95,15 +94,6 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </AppCard>
         </View>
-
-        {message ? (
-          <AppText
-            variant="caption"
-            style={{ color: isError ? colors.danger : colors.success }}
-          >
-            {message}
-          </AppText>
-        ) : null}
 
         <View style={styles.footer}>
           {user ? (

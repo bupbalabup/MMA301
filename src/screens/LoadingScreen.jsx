@@ -86,7 +86,7 @@ export default function LoadingScreen({ navigation, route }) {
         navigation.replace('Result', { result, imageBase64 });
       } catch (error) {
         console.error('Room analysis failed:', error);
-        const nextErrorMessage = getErrorMessage(error);
+        const nextErrorMessage = error?.message || getErrorMessage(error);
         setErrorMessage(nextErrorMessage);
 
         setTimeout(() => {
