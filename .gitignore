@@ -20,6 +20,12 @@ babel-cache/
 .env
 .env.*
 *.env
+!.env.example
+
+# Local SQLite databases and caches
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 npm-debug.log*
@@ -43,12 +49,18 @@ Thumbs.db
 .tool-home/
 .tool-bin/
 
-.github/
-.prompts/
-.agent/
+.agents/
+AGENTS.md
+ARCHITECTURE.md
+CODING_GUIDELINES.md
+DATABASE.md
+DECISIONS.md
+FEATURES.md
+PROJECT_SPEC.md
+ROADMAP.md
+UI.md
 
-AI_MEMORY/
-docs/
+# package-lock.json
+app.json
 google-services.json
-package-lock.json
 

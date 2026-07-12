@@ -1,0 +1,22 @@
+export const MOVING_SPEED_THRESHOLD_KMH = 5;
+export const MOVING_DISTANCE_THRESHOLD_METERS = 50;
+export const PARKING_RADIUS_METERS = 30;
+export const TEMPORARY_STOP_DURATION_MS = 30 * 1000;
+export const PARKING_DURATION_MS = 3 * 60 * 1000;
+export const GPS_LOST_TIMEOUT_MS = 30 * 1000;
+export const DEFAULT_GPS_INTERVAL_MS = 1000;
+export const REMOTE_DEVICE_OFFLINE_TIMEOUT_MS = 60 * 1000;
+export const MIN_VALID_POINT_INTERVAL_MS = 500;
+export const MAX_ACCEPTABLE_ACCURACY_METERS = 80;
+export const SINGLE_POINT_SPIKE_SPEED_KMH = 500;
+export const SPIKE_CONFIRMATION_COUNT = 2;
+export const MAX_JUMP_DISTANCE_METERS = 1000;
+
+export const TRACKING_STATUS = {
+  IDLE: 'Idle',
+  MOVING: 'Moving',
+  PAUSED: 'Paused',
+  PARKING: 'Parking',
+  OFFLINE: 'Offline',
+  GPS_LOST: 'GPS Lost',
+};

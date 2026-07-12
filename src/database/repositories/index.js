@@ -1,0 +1,25 @@
+export {
+  createTrip,
+  deleteTrip,
+  endTrip,
+  getActiveTrip,
+  getTripById,
+  listPendingCloudSyncTrips,
+  listTripDates,
+  listTrips,
+  listTripsByDate,
+  updateTripCloudSyncStatus,
+  updateTrip,
+} from './tripRepository';
+export {
+  addGpsPoint,
+  addGpsPoints,
+  countGpsPointsByTrip,
+  countGpsPointsByTripRange,
+  deleteGpsPointsAfterTimestamp,
+  deleteGpsPointsByTrip,
+  getFirstGpsPoint,
+  getLatestGpsPoint,
+  listGpsPointsByTrip,
+  listGpsPointsByTripRange,
+} from './gpsPointRepository';

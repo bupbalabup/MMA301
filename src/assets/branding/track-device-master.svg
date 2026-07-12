@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Track Device Connected Waypoint</title>
+  <desc id="desc">A central device node connected to two location network nodes.</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M28 70h26c12 0 18-8 26-18" stroke="#35C8C3" stroke-width="14"/>
+    <circle cx="27" cy="70" r="13" fill="#35C8C3" stroke="none"/>
+    <path d="M176 204c8-18 15-22 30-22h23" stroke="#35C8C3" stroke-width="14"/>
+    <circle cx="229" cy="182" r="13" fill="#35C8C3" stroke="none"/>
+    <rect x="70" y="28" width="116" height="200" rx="34" fill="#1D6FEB" stroke="#0F172A" stroke-width="12"/>
+    <path d="M99 128c0-22 14-37 32-37 20 0 31 15 31 34 0 25-31 48-31 48s-32-22-32-45z" stroke="#FFFFFF" stroke-width="12"/>
+    <circle cx="131" cy="124" r="10" fill="#35C8C3" stroke="#FFFFFF" stroke-width="7"/>
+    <path d="M111 55h40" stroke="#FFFFFF" stroke-width="9" opacity=".9"/>
+  </g>
+</svg>

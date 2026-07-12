@@ -1,0 +1,2 @@
+export { checkInternetConnection } from './connectivityService';
+
