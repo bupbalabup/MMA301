@@ -260,7 +260,7 @@ export default function SettingsScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Section icon="device" title="Thiết bị này">
+        <Section icon="device" title="Thiết bị">
           <Text style={styles.explanationText}>
             Chỉ thiết bị đang chạy ứng dụng này có thể ghi GPS. Thiết bị khác chỉ được theo dõi từ xa.
           </Text>
@@ -300,7 +300,7 @@ export default function SettingsScreen({ navigation }) {
           />
         </Section>
 
-        <Section icon="movement" title="Theo dõi tự động">
+        <Section icon="movement" title="Theo dõi và quyền">
           <InfoRow label="Trạng thái" value={isTrackingEnabled ? 'Đang bật' : 'Đang tắt'} last />
           {isTrackingEnabled ? (
             <DangerButton
@@ -319,7 +319,7 @@ export default function SettingsScreen({ navigation }) {
           )}
         </Section>
 
-        <Section icon="dashboard" title="Thông tin thiết bị">
+        <Section icon="dashboard" title="Trạng thái theo dõi">
           <InfoRow label="Chuyển động" value={formatStatus(movementStatus)} />
           <InfoRow label="Kết nối" value={formatStatus(connectionStatus)} />
           <InfoRow label="Tốc độ hiện tại" value={formatSpeed(currentSpeedKmh)} />
@@ -332,7 +332,7 @@ export default function SettingsScreen({ navigation }) {
           <InfoRow label="Email tài khoản" value={user?.email ?? 'Không xác định'} last />
         </Section>
 
-        <Section icon="permission" title="Thiết lập theo dõi">
+        <Section icon="permission" title="Quyền và thiết lập hệ thống">
           <Text style={styles.groupLabel}>Bắt buộc</Text>
           <StatusRow label="Vị trí khi dùng ứng dụng" status={foregroundStatus} />
           <StatusRow label="Dịch vụ vị trí" status={servicesStatus} />

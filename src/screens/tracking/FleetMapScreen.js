@@ -193,7 +193,7 @@ export default function FleetMapScreen() {
     : fleetDevices.filter((device) => device.isOnline).length;
   const hasListenerErrors = Object.keys(errorsByDeviceId).length > 0;
   const markerAppearanceKey = fleetDevices
-    .map((device) => `${device.deviceId}:${device.isOnline}`)
+    .map((device) => `${device.deviceId}:${device.isOnline}:${device.markerColor ?? ''}`)
     .join('|');
 
   useEffect(() => {
@@ -289,6 +289,7 @@ export default function FleetMapScreen() {
                   isLocal={fleetDevice.isLocalDevice}
                   isOnline={fleetDevice.isOnline}
                   isSelected={fleetDevice.deviceId === selectedFleetDevice?.deviceId}
+                  markerColor={fleetDevice.markerColor}
                 />
               </Marker>
             ))}

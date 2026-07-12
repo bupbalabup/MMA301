@@ -189,6 +189,7 @@ export function useFleetLiveLocations({ devices, localDeviceId, uid }) {
             {
               ...location,
               deviceName: getDeviceName(device),
+              markerColor: device?.markerColor ?? null,
               platform: device?.platform ?? null,
               connectionStatus: isFresh ? 'Online' : 'Offline',
               lastOnlineAt: isFresh ? lastUpdateMs : location?.lastOnlineAt ?? lastUpdateMs,
@@ -228,6 +229,7 @@ export function useFleetLiveLocations({ devices, localDeviceId, uid }) {
       return {
         device,
         deviceId,
+        markerColor: device?.markerColor ?? null,
         name: getDeviceName(device),
         liveLocation,
         error: errorsByDeviceId[deviceId] ?? '',

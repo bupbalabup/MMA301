@@ -10,17 +10,21 @@ export const AuthRoutes = {
 
 export const MainRoutes = {
   Account: 'Account',
-  Dashboard: 'Dashboard',
-  FleetMap: 'FleetMap',
   LiveTracking: 'LiveTracking',
-  History: 'History',
   MyDevices: 'MyDevices',
   NotificationPreferences: 'NotificationPreferences',
   TripDetail: 'TripDetail',
   Playback: 'Playback',
   PermissionSetup: 'PermissionSetup',
-  Settings: 'Settings',
   SecurityLog: 'SecurityLog',
   SignedInDevices: 'SignedInDevices',
   SyncStatus: 'SyncStatus',
+  MainTabs: 'MainTabs',
+};
+
+export const TabRoutes = {
+  HomeTab: 'HomeTab',
+  MapTab: 'MapTab',
+  HistoryTab: 'HistoryTab',
+  SettingsTab: 'SettingsTab',
 };

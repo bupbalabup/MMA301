@@ -1,21 +1,6 @@
 import { APP_VERSION } from '../../constants/app';
-import { timestampToMillis } from '../../utils/timestamp';
 import { EMPTY_VALUE, formatDateTime } from '../../utils/format';
-import { colors } from '../../theme';
-
-export const MARKER_COLORS = [
-  { label: 'Xanh dương', value: colors.primary },
-  { label: 'Xanh lá', value: colors.moving },
-  { label: 'Cam', value: colors.parking },
-  { label: 'Đỏ', value: colors.danger },
-];
-
-export const MARKER_ICONS = [
-  { label: 'Thiết bị', value: 'device' },
-  { label: 'Vị trí', value: 'location' },
-  { label: 'Di chuyển', value: 'movement' },
-  { label: 'Bản đồ', value: 'liveMap' },
-];
+import { timestampToMillis } from '../../utils/timestamp';
 
 export function getDeviceDisplayName(device) {
   return device?.name ?? device?.deviceName ?? 'Thiết bị';
@@ -64,7 +49,7 @@ export function getSecurityActionLabel(action) {
     logout: 'Đăng xuất',
     logout_all: 'Đăng xuất tất cả',
     rename_device: 'Đổi tên thiết bị',
-    update_device_marker: 'Cập nhật marker thiết bị',
+    update_device_marker: 'Cập nhật màu marker thiết bị',
   };
 
   return labels[action] ?? 'Hoạt động tài khoản';

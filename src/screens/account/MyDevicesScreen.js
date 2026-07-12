@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { DangerButton, PrimaryButton, SurfaceCard } from '../../components/ui';
+import {
+  ColorPickerModal,
+  DangerButton,
+  PrimaryButton,
+  SecondaryButton,
+  SurfaceCard,
+} from '../../components/ui';
 import { useAuth, useDevice } from '../../contexts';
 import {
   logSecurityEvent,
@@ -11,17 +17,15 @@ import {
   updateDevicePreferences,
 } from '../../services/firebase/accountSecurityService';
 import { colors, radius, spacing, typography } from '../../theme';
+import { getSafeMarkerColor, normalizeHexColor } from '../../utils/color';
 import {
   getDeviceDisplayName,
   getPlatformLabel,
-  MARKER_COLORS,
-  MARKER_ICONS,
 } from './accountHelpers';
 
 function createDraft(device) {
   return {
-    markerColor: device.markerColor ?? colors.primary,
-    markerIcon: device.markerIcon ?? 'device',
+    markerColor: getSafeMarkerColor(device.markerColor),
     name: getDeviceDisplayName(device),
   };
 }
@@ -40,6 +44,7 @@ export default function MyDevicesScreen() {
   const [drafts, setDrafts] = useState({});
   const [savingDeviceId, setSavingDeviceId] = useState(null);
   const [deletingDeviceId, setDeletingDeviceId] = useState(null);
+  const [colorPickerDeviceId, setColorPickerDeviceId] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -55,7 +60,7 @@ export default function MyDevicesScreen() {
       };
     });
     setDrafts(nextDrafts);
-    // Rebuild when the Firestore device list changes; keep local edits while mounted.
+    // Keep local edits while mounted; rebuild only when the Firestore device list changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleDevices]);
 
@@ -72,9 +77,15 @@ export default function MyDevicesScreen() {
   async function saveDevice(device) {
     const draft = drafts[device.deviceId] ?? createDraft(device);
     const trimmedName = draft.name.trim();
+    const normalizedMarkerColor = normalizeHexColor(draft.markerColor);
 
     if (!trimmedName) {
       setError('Tên thiết bị không được để trống.');
+      return;
+    }
+
+    if (!normalizedMarkerColor) {
+      setError('Mã màu marker không hợp lệ.');
       return;
     }
 
@@ -85,12 +96,10 @@ export default function MyDevicesScreen() {
     try {
       const previousName = getDeviceDisplayName(device);
       const markerChanged =
-        draft.markerColor !== (device.markerColor ?? colors.primary) ||
-        draft.markerIcon !== (device.markerIcon ?? 'device');
+        normalizedMarkerColor !== getSafeMarkerColor(device.markerColor);
 
       await updateDevicePreferences(user.uid, device.deviceId, {
-        markerColor: draft.markerColor,
-        markerIcon: draft.markerIcon,
+        markerColor: normalizedMarkerColor,
         name: trimmedName,
       });
 
@@ -119,6 +128,7 @@ export default function MyDevicesScreen() {
           targetDeviceName: trimmedName,
         });
       }
+
       await refreshDevices();
       setMessage('Đã lưu thiết bị.');
     } catch (saveError) {
@@ -166,7 +176,7 @@ export default function MyDevicesScreen() {
       >
         <Text style={styles.title}>Thiết bị của tôi</Text>
         <Text style={styles.description}>
-          Đổi tên, màu và kiểu marker cho từng thiết bị trong tài khoản.
+          Đổi tên và màu marker trên bản đồ cho từng thiết bị trong tài khoản.
         </Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -174,6 +184,7 @@ export default function MyDevicesScreen() {
         {visibleDevices.map((device) => {
           const draft = drafts[device.deviceId] ?? createDraft(device);
           const isCurrentDevice = device.deviceId === localDeviceId;
+          const safeMarkerColor = getSafeMarkerColor(draft.markerColor);
 
           return (
             <SurfaceCard key={device.deviceId} style={styles.card}>
@@ -190,39 +201,33 @@ export default function MyDevicesScreen() {
                 value={draft.name}
               />
 
-              <Text style={styles.inputLabel}>Màu marker</Text>
-              <View style={styles.optionRow}>
-                {MARKER_COLORS.map((option) => (
-                  <Pressable
-                    accessibilityLabel={`Chọn màu ${option.label}`}
-                    accessibilityRole="button"
-                    key={option.value}
-                    onPress={() => updateDraft(device.deviceId, { markerColor: option.value })}
-                    style={[
-                      styles.colorOption,
-                      { backgroundColor: option.value },
-                      draft.markerColor === option.value && styles.optionSelected,
-                    ]}
-                  />
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Icon marker</Text>
-              <View style={styles.optionWrap}>
-                {MARKER_ICONS.map((option) => (
-                  <Pressable
-                    accessibilityRole="button"
-                    key={option.value}
-                    onPress={() => updateDraft(device.deviceId, { markerIcon: option.value })}
-                    style={[
-                      styles.textOption,
-                      draft.markerIcon === option.value && styles.textOptionSelected,
-                    ]}
-                  >
-                    <Text style={styles.textOptionLabel}>{option.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
+              <Text style={styles.inputLabel}>Màu marker trên bản đồ</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Mở bảng màu marker cho ${getDeviceDisplayName(device)}`}
+                hitSlop={4}
+                onPress={() => setColorPickerDeviceId(device.deviceId)}
+                style={({ pressed }) => [
+                  styles.colorPickerRow,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.colorPreview,
+                    { backgroundColor: safeMarkerColor },
+                  ]}
+                />
+                <View style={styles.colorTextWrap}>
+                  <Text style={styles.colorLabel}>Màu marker hiện tại</Text>
+                  <Text style={styles.colorValue}>{safeMarkerColor}</Text>
+                </View>
+                <SecondaryButton
+                  label="Mở bảng màu"
+                  onPress={() => setColorPickerDeviceId(device.deviceId)}
+                  style={styles.colorButton}
+                />
+              </Pressable>
 
               <PrimaryButton
                 label={savingDeviceId === device.deviceId ? 'Đang lưu...' : 'Lưu thiết bị'}
@@ -238,6 +243,16 @@ export default function MyDevicesScreen() {
                   style={styles.button}
                 />
               ) : null}
+
+              <ColorPickerModal
+                initialColor={safeMarkerColor}
+                visible={colorPickerDeviceId === device.deviceId}
+                onCancel={() => setColorPickerDeviceId(null)}
+                onDone={(nextColor) => {
+                  updateDraft(device.deviceId, { markerColor: nextColor });
+                  setColorPickerDeviceId(null);
+                }}
+              />
             </SurfaceCard>
           );
         })}
@@ -253,10 +268,39 @@ const styles = StyleSheet.create({
   card: {
     marginTop: spacing.md,
   },
-  colorOption: {
-    borderRadius: radius.pill,
-    height: 30,
-    width: 30,
+  colorButton: {
+    minWidth: 118,
+  },
+  colorLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+  },
+  colorPickerRow: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSecondary,
+    borderColor: colors.border,
+    borderRadius: radius.medium,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    padding: spacing.sm,
+  },
+  colorPreview: {
+    borderColor: colors.borderStrong,
+    borderRadius: radius.small,
+    borderWidth: 1,
+    height: 38,
+    width: 50,
+  },
+  colorTextWrap: {
+    flex: 1,
+  },
+  colorValue: {
+    ...typography.caption,
+    color: colors.textPrimary,
+    fontWeight: '800',
+    marginTop: 2,
   },
   content: {
     padding: spacing.lg,
@@ -301,41 +345,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: spacing.xs,
   },
-  optionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  optionSelected: {
-    borderColor: colors.textPrimary,
-    borderWidth: 3,
-  },
-  optionWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+  pressed: {
+    opacity: 0.82,
   },
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  textOption: {
-    backgroundColor: colors.surfaceSecondary,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  textOptionLabel: {
-    ...typography.caption,
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  textOptionSelected: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary,
   },
   title: {
     ...typography.screenTitle,

@@ -1,176 +1,297 @@
-# Track Device Marketing Presentation Script
+# Kịch Bản Thuyết Trình Track Device
 
-## Opening
+Tài liệu này dùng cho phần thuyết trình khoảng 12 đến 15 phút trước giảng viên, sinh viên và người chưa từng xem ứng dụng.
 
-Xin chào thầy cô và các bạn. Hôm nay em xin giới thiệu dự án Track Device, một ứng dụng theo dõi vị trí thiết bị được xây dựng bằng React Native, Expo và Firebase.
+## 1. Giới Thiệu
 
-Ý tưởng của Track Device xuất phát từ nhu cầu quản lý nhiều thiết bị di chuyển trong thực tế. Ví dụ một cá nhân hoặc một nhóm có nhiều điện thoại, xe, hoặc thiết bị cần theo dõi vị trí. Người dùng muốn biết thiết bị đang ở đâu, vừa di chuyển hay đang dừng, và lịch sử hành trình được lưu lại như thế nào.
+Kính chào thầy cô và các bạn.
 
-## Problem
+Em xin trình bày dự án Track Device, một ứng dụng theo dõi vị trí thiết bị theo thời gian thực được xây dựng bằng React Native, Expo, Firebase và SQLite.
 
-Nhiều ứng dụng theo dõi vị trí hiện nay yêu cầu cấu hình phức tạp, phụ thuộc mạng liên tục, hoặc không rõ dữ liệu được lưu ở đâu. Với bài toán quản lý xe thuê hoặc đội thiết bị, người quản lý cần xem nhiều thiết bị cùng lúc, biết thiết bị nào đang trực tuyến, thiết bị nào mất kết nối, và có thể xem lại hành trình sau đó.
+Ý tưởng của dự án xuất phát từ một nhu cầu rất thực tế: khi một cá nhân, một nhóm hoặc một đơn vị quản lý nhiều thiết bị di chuyển, họ cần biết thiết bị đang ở đâu, có đang di chuyển không, đã đi những tuyến đường nào và dữ liệu có còn được ghi lại khi mất Internet hay không.
 
-Một vấn đề khác là dữ liệu GPS có thể không ổn định. Nếu chỉ lấy tốc độ do hệ điều hành trả về hoặc không lọc điểm GPS sai, ứng dụng có thể hiển thị tốc độ bất thường. Track Device xử lý vấn đề này bằng cách tính tốc độ từ tọa độ và thời gian, đồng thời lọc các điểm GPS bất thường.
+Track Device được xây dựng như một đồ án học tập, nhưng hướng tiếp cận được thiết kế gần với một sản phẩm thực tế: có đăng nhập, có quản lý nhiều thiết bị, có tracking GPS, có bản đồ đội thiết bị, có lịch sử hành trình, có phát lại tuyến đường và có cơ chế offline local-first.
 
-## Solution
+## 2. Vấn Đề
 
-Track Device là ứng dụng theo dõi nhiều thiết bị trong cùng một tài khoản. Mỗi thiết bị tự ghi dữ liệu GPS của chính nó vào SQLite. Đồng thời, thiết bị cập nhật vị trí mới nhất lên Firestore để các thiết bị khác trong cùng tài khoản có thể xem.
+Trong thực tế, việc theo dõi vị trí nhiều thiết bị không chỉ là mở một bản đồ và xem một chấm tọa độ. Người quản lý thường gặp các vấn đề như:
 
-Điểm khác biệt của dự án là cách tiếp cận local-first: dữ liệu hành trình cục bộ vẫn được giữ trên thiết bị ghi GPS, kể cả khi mất mạng. Khi có Internet, các chuyến đã hoàn thành có thể đồng bộ lên đám mây để thiết bị khác xem lịch sử và phát lại tuyến đường.
+- Không biết thiết bị nào đang trực tuyến, thiết bị nào mất kết nối.
+- Khi mất Internet, dữ liệu hành trình có thể bị gián đoạn.
+- Lịch sử hành trình không phải lúc nào cũng có thể xem lại rõ ràng.
+- Một số ứng dụng phụ thuộc quá nhiều vào cloud, nếu mạng yếu thì trải nghiệm giảm mạnh.
+- Dữ liệu GPS đôi khi bị nhảy bất thường, làm tốc độ hiển thị không chính xác.
+- Với bài toán xe thuê hoặc đội thiết bị, người quản lý cần xem nhiều thiết bị cùng lúc chứ không chỉ một thiết bị.
 
-## Technology
+Ví dụ trong quản lý xe cho thuê, người quản lý muốn biết xe đang ở đâu, đã chạy bao xa, có dừng quá lâu hay không, và sau khi xe trả về có thể xem lại tuyến đường. Nếu ứng dụng chỉ hoạt động khi có mạng thì rất dễ mất dữ liệu ở những khu vực sóng yếu.
 
-Ứng dụng dùng React Native để xây dựng giao diện di động. Expo SDK 54 hỗ trợ location, SQLite, TaskManager và cấu hình Android/iOS. Firebase Auth xử lý đăng nhập bằng email và mật khẩu. Firestore lưu người dùng, thiết bị, vị trí realtime và lịch sử chuyến đã đồng bộ. SQLite lưu lịch sử cục bộ. Google Maps thông qua `react-native-maps` dùng cho Fleet Map và Playback.
+## 3. Giải Pháp
 
-## Demo Flow
+Track Device giải quyết bài toán bằng cách kết hợp dữ liệu cục bộ và dữ liệu đám mây.
 
-Đầu tiên, người dùng đăng ký hoặc đăng nhập bằng email và mật khẩu. Sau khi đăng nhập, ứng dụng kiểm tra thiết lập quyền vị trí. Nếu chưa hoàn tất, Permission Wizard sẽ hướng dẫn cấp quyền vị trí, thông báo, tự khởi động và tối ưu pin trên Android, hoặc các bước tương ứng trên iOS.
+Mỗi thiết bị tự ghi hành trình của chính nó vào SQLite. Đây là phần local-first. Nghĩa là nếu mất mạng, thiết bị vẫn có thể tiếp tục ghi dữ liệu GPS cục bộ.
 
-Sau đó người dùng vào Dashboard. Dashboard hiển thị tổng số thiết bị, số thiết bị trực tuyến, số thiết bị mất kết nối, bản đồ nhỏ, thiết bị đang xem, tốc độ hiện tại hoặc gần nhất, trạng thái di chuyển, tọa độ và các nút đi tới Live Tracking, Fleet Map, History và Settings.
+Khi có Internet, thiết bị cập nhật vị trí live lên Firestore để các thiết bị khác trong cùng tài khoản có thể xem. Khi một chuyến hoàn thành, dữ liệu tóm tắt và các điểm GPS cần cho playback được đồng bộ lên Firestore theo từng chunk.
 
-Fleet Map hiển thị nhiều thiết bị trên cùng một bản đồ. Khi chọn một marker, panel phía dưới hiển thị tên thiết bị, trạng thái kết nối, trạng thái di chuyển, tốc độ, thời gian cập nhật, tọa độ và nguồn dữ liệu.
+Điểm khác biệt của Track Device là app không thay thế dữ liệu local bằng cloud. SQLite vẫn là nguồn chính cho lịch sử của thiết bị hiện tại. Firestore là lớp realtime và lớp đồng bộ để xem từ xa.
 
-History cho phép chọn thiết bị lịch sử. Nếu là thiết bị hiện tại, dữ liệu được đọc từ SQLite. Nếu là thiết bị từ xa, dữ liệu được đọc từ Firestore trip summaries. Khi chọn một chuyến, Trip Detail hiển thị thông tin chuyến và có thể mở Playback.
+## 4. Kiến Trúc Và Công Nghệ
 
-Playback phát lại tuyến đường đã ghi. Người dùng có thể phát, tạm dừng, tua về đầu, tới cuối, kéo thanh tiến trình và thay đổi tốc độ phát.
+Ứng dụng dùng React Native để xây dựng giao diện mobile và Expo SDK 54 để hỗ trợ location, SQLite, TaskManager và cấu hình build.
 
-Settings cho phép đổi tên thiết bị, bật/tắt theo dõi tự động, kiểm tra quyền, mở lại wizard, vào hồ sơ tài khoản, xem thiết bị đăng nhập, quản lý thiết bị, thông báo, đồng bộ và nhật ký hoạt động.
+Firebase Auth được dùng cho đăng nhập bằng email và mật khẩu. Firestore lưu hồ sơ người dùng, danh sách thiết bị, vị trí realtime, trip summaries, GPS chunks và security logs.
 
-## Tracking Demo
+SQLite lưu dữ liệu chuyến và điểm GPS trên thiết bị. Đây là phần quan trọng giúp ứng dụng vẫn có lịch sử khi mất mạng.
 
-Khi tracking được bật, TrackingEngine nhận vị trí từ GpsEngine. Nếu thiết bị bắt đầu di chuyển, app tự tạo chuyến đi. Khi thiết bị dừng trên 30 giây, trạng thái thành Tạm dừng. Khi dừng đủ 3 phút, app xác nhận Đỗ xe và hoàn tất chuyến.
+Google Maps thông qua `react-native-maps` được dùng cho Fleet Map và Playback. AsyncStorage được dùng để cache danh sách thiết bị, thiết bị đang chọn, thiết lập wizard và snapshot live gần nhất.
 
-Nếu Internet mất, app vẫn ghi local vào SQLite. Vị trí realtime không thể cập nhật lên Firestore, nhưng dữ liệu cục bộ không mất. Khi mạng quay lại, các chuyến đang chờ đồng bộ có thể được gửi lên Firestore.
+Về kiến trúc, app có các provider chính:
 
-## Offline Demo
+- AuthProvider quản lý đăng nhập.
+- PermissionSetupProvider quản lý wizard và trạng thái quyền.
+- DeviceProvider quản lý thiết bị cục bộ và danh sách thiết bị.
+- TrackingProvider khởi tạo TrackingEngine cho thiết bị hiện tại.
+- LiveDeviceProvider đọc live-location của thiết bị đang xem và fleet.
+- ConnectivityProvider theo dõi trạng thái mạng.
 
-Khi mất Internet, Dashboard và Live Tracking dùng cache hiển thị dữ liệu gần nhất. Fleet Map không render Google Map khi offline để tránh crash. History local vẫn mở được vì đọc SQLite. Khi có mạng lại, sync có thể chạy thủ công hoặc retry một lần sau reconnect.
+## 5. Demo Tổng Quan Giao Diện
 
-## Technical Highlights
+Đầu tiên là màn hình đăng nhập và đăng ký. Người dùng đăng ký bằng email, mật khẩu và nhập lại mật khẩu. Sau khi đăng nhập, app khởi tạo hồ sơ người dùng và thiết bị cục bộ.
 
-- Local-first: SQLite là nguồn chính cho lịch sử thiết bị hiện tại.
-- Firestore live location: chỉ lưu vị trí mới nhất, không lưu toàn bộ route.
-- Cloud history: lưu trip summary và GPS chunks, mỗi chunk 150 điểm.
-- Tracking engine: tự phát hiện Moving, Paused, Parking và GPS Lost.
-- GPS validation: lọc điểm sai thay vì hiển thị tốc độ bị clamp.
-- Offline cache: giữ dữ liệu hiển thị gần nhất.
-- Foreground notification: Android native build có thông báo theo dõi khi tracking hoạt động.
+Nếu thiết lập quyền chưa hoàn tất, Permission Wizard sẽ xuất hiện. Trên Android, wizard hướng dẫn quyền vị trí khi dùng ứng dụng, vị trí luôn cho phép, tự khởi động, tối ưu pin và thông báo. Trên iOS, wizard có luồng riêng phù hợp với hệ điều hành và giải thích rõ giới hạn của Expo Go với tracking nền.
 
-## Advantages
+Sau khi hoàn tất, người dùng vào Dashboard trong tab Trang chủ. Dashboard hiển thị tổng số thiết bị, thiết bị trực tuyến, thiết bị mất kết nối, bản đồ nhỏ, thiết bị đang chọn và các chỉ số như tốc độ, tốc độ tối đa, thời gian dừng, quãng đường hôm nay nếu có và tọa độ.
+
+Điều hướng chính nằm ở Bottom Tab gồm Trang chủ, Bản đồ, Lịch sử và Cài đặt. Live Tracking không có tab riêng; người dùng mở chi tiết theo dõi bằng cách nhấn card tốc độ hoặc thiết bị đang xem trên Trang chủ.
+
+## 6. Demo Tracking
+
+Khi tracking hoạt động, GpsEngine nhận vị trí từ Expo Location. TrackingEngine kiểm tra từng điểm GPS, chuẩn hóa timestamp, tính khoảng cách Haversine giữa hai tọa độ liên tiếp và tính tốc độ theo thời gian.
+
+Nếu thiết bị bắt đầu di chuyển, app tự tạo chuyến. Nếu thiết bị dừng trên 30 giây, trạng thái chuyển sang Tạm dừng. Nếu dừng đủ 3 phút, app xác nhận Đỗ xe và hoàn tất chuyến.
+
+Ứng dụng không lấy tốc độ hệ điều hành trả về làm nguồn duy nhất. Tốc độ chính được tính từ tọa độ và timestamp. Các điểm GPS bất thường được từ chối thay vì hiển thị tốc độ bị giới hạn giả.
+
+Trên Android native build, khi tracking đang chạy, app có thể hiển thị foreground-service notification cho thiết bị cục bộ. Thông báo này hiển thị tên thiết bị, tốc độ, trạng thái kết nối và trạng thái di chuyển. Đây không phải push notification và cần kiểm thử bằng Development Build hoặc APK.
+
+## 7. Demo Offline
+
+Khi mất Internet, Track Device không reset dữ liệu hiển thị về 0. Dashboard và Live Tracking dùng cache live snapshot gần nhất để người dùng vẫn thấy tốc độ gần nhất, trạng thái di chuyển, tọa độ và thời gian cập nhật.
+
+Fleet Map không render Google Map khi offline để tránh crash bản đồ. Thay vào đó, app hiển thị trạng thái ngoại tuyến và nút thử lại.
+
+Quan trọng nhất, tracking local vẫn ghi SQLite nếu GPS hoạt động. Khi Internet quay lại, các chuyến hoàn thành đang chờ có thể được đồng bộ thủ công hoặc được thử lại một lần theo luồng reconnect.
+
+## 8. Demo Fleet Map
+
+Fleet Map hiển thị nhiều thiết bị trong cùng tài khoản trên một bản đồ. Mỗi thiết bị có marker riêng nếu có tọa độ hợp lệ. Marker được thiết kế riêng, không dùng native pin mặc định.
+
+Khi chọn một marker, panel thông tin hiển thị:
+
+- Tên thiết bị.
+- Thiết bị này hay thiết bị từ xa.
+- Trạng thái kết nối.
+- Trạng thái di chuyển.
+- Tốc độ hiện tại hoặc gần nhất.
+- Tốc độ tối đa.
+- Thời gian dừng.
+- Quãng đường hôm nay nếu có.
+- Thời gian cập nhật.
+- Tọa độ.
+- Nguồn dữ liệu.
+
+Điều này giúp người dùng xem nhiều thiết bị cùng lúc mà vẫn có thông tin chi tiết khi cần.
+
+## 9. Demo History
+
+History cho phép chọn thiết bị lịch sử. Nếu chọn thiết bị hiện tại, app đọc dữ liệu từ SQLite. Nếu chọn thiết bị từ xa, app đọc trip summaries từ Firestore.
+
+Lịch sử được nhóm theo ngày. Mỗi ngày có tóm tắt như số chuyến, tổng quãng đường, thời lượng di chuyển, thời lượng dừng, tốc độ tối đa và số điểm GPS.
+
+Với chuyến local chưa đồng bộ, người dùng vẫn xem được đầy đủ thông tin vì dữ liệu nằm trong SQLite. Nút đồng bộ chỉ xuất hiện cho lịch sử local và cho phép gửi các chuyến đang chờ lên Firestore khi có Internet.
+
+## 10. Demo Playback
+
+Playback phát lại hành trình trên bản đồ.
+
+Nếu là chuyến local, Playback đọc điểm GPS từ SQLite. Nếu là chuyến cloud, Playback đọc trip summary và gpsChunks từ Firestore. Các điểm được chuẩn hóa timestamp, lọc tọa độ không hợp lệ, sắp xếp theo thời gian và giới hạn trong khoảng startTime đến endTime.
+
+Người dùng có thể phát, tạm dừng, phát lại, về đầu, đến cuối, kéo thanh tiến trình và đổi tốc độ phát. Marker di chuyển theo tuyến đường, còn polyline tiến trình cho biết đoạn đã đi qua.
+
+## 11. Demo Cài Đặt Và Tài Khoản
+
+Settings cho phép đổi tên thiết bị, bật hoặc tắt tracking tự động, kiểm tra quyền, mở lại wizard và truy cập các phần tài khoản.
+
+Các màn hình tài khoản gồm:
+
+- Hồ sơ tài khoản.
+- Đổi mật khẩu.
+- Thiết bị đang đăng nhập.
+- Quản lý thiết bị của tôi.
+- Đổi màu marker thiết bị trên bản đồ trực tiếp.
+- Tuỳ chọn thông báo.
+- Trạng thái đồng bộ.
+- Nhật ký bảo mật.
+
+Các thao tác nhạy cảm như đổi mật khẩu, kick thiết bị hoặc đăng xuất tất cả yêu cầu nhập lại mật khẩu. Tuy nhiên, vì dự án chưa có backend Admin SDK, kick thiết bị là cơ chế app-level qua Firestore, chưa phải thu hồi token Firebase toàn cục.
+
+## 12. Ưu Điểm
+
+Track Device có một số ưu điểm thực tế:
 
 - Theo dõi nhiều thiết bị trong cùng tài khoản.
 - Không mất lịch sử local khi mất mạng.
-- Có thể xem thiết bị từ xa qua Firestore.
+- Có cache để giao diện vẫn hiển thị dữ liệu gần nhất.
+- Có bản đồ đội thiết bị.
+- Có lịch sử theo ngày.
 - Có phát lại hành trình.
-- Có quản lý tài khoản, thiết bị và nhật ký bảo mật.
-- Giao diện mobile rõ ràng, có Dashboard và Fleet Map.
+- Có đồng bộ cloud theo chunk, không ghi một document cho mỗi điểm GPS.
+- Có phân tách rõ thiết bị cục bộ, thiết bị đang xem và thiết bị lịch sử.
+- Có kiến trúc phù hợp để mở rộng.
 
-## Current Limitations
+## 13. Khả Năng Mở Rộng
 
-Ứng dụng chưa có backend Admin SDK nên chức năng kick thiết bị là cơ chế client-mediated qua Firestore, không phải thu hồi token Firebase toàn cục.
+Trong tương lai, dự án có thể mở rộng:
 
-Theo dõi nền bền vững chưa hoàn chỉnh. TaskManager đã có, nhưng chưa tự khôi phục auth, local device và active trip khi React runtime không còn hoạt động.
+- Geofence.
+- Cảnh báo tốc độ.
+- Thống kê đội thiết bị.
+- Nhắc bảo trì.
+- Quản lý tài xế.
+- Quản lý xe thuê.
+- Phân quyền người dùng.
+- Web dashboard.
+- Backend bảo mật với Admin SDK.
+- Tracking nền bền vững hơn.
 
-Ứng dụng chưa có geofence, cảnh báo tốc độ, push notification backend, camera, dashcam, video hay AI.
+Những phần này hiện chưa được triển khai trong source code, nên khi demo cần nói rõ là định hướng tương lai.
 
-## Future Development
+## 14. Kết Luận
 
-Trong tương lai, dự án có thể phát triển geofence, cảnh báo tốc độ, thống kê đội thiết bị, quản lý xe thuê, nhắc bảo trì, phân quyền người dùng, backend bảo mật và web dashboard.
+Track Device là một ứng dụng GPS tracking local-first, tập trung vào theo dõi nhiều thiết bị, lưu lịch sử hành trình, hỗ trợ offline và đồng bộ cloud.
 
-## Conclusion
-
-Track Device là một ứng dụng theo dõi thiết bị đa nền tảng, tập trung vào local-first GPS tracking, multi-device monitoring, offline cache và lịch sử hành trình. Dự án hiện đã có nền tảng quan trọng cho một sản phẩm theo dõi thiết bị thực tế, nhưng vẫn cần runtime acceptance trên Android Development Build hoặc APK để xác nhận các hành vi native.
+Dự án đã có nền tảng kỹ thuật quan trọng: Firebase Auth, Firestore, SQLite, TrackingEngine, Fleet Map, History, Playback, Permission Wizard, cache offline và account/security UI. Một số phần native như tracking nền bền vững và foreground service notification vẫn cần kiểm thử trên Android Development Build hoặc EAS APK.
 
 Em xin cảm ơn thầy cô và các bạn đã lắng nghe. Em sẵn sàng trả lời câu hỏi.
 
-## Frequently Asked Questions
+## 40 Câu Hỏi Phản Biện Và Trả Lời
 
-1. Ứng dụng dùng đăng nhập gì?  
-Firebase Email/Password.
+1. Ứng dụng dùng cơ chế đăng nhập nào?
+Ứng dụng dùng Firebase Email/Password với đăng ký, đăng nhập, đăng xuất và đổi mật khẩu.
 
-2. Có Google Sign-In không?  
-Không.
+2. Có đăng nhập bằng nhà cung cấp bên thứ ba không?
+Không. Source code hiện tại chỉ hỗ trợ email và mật khẩu.
 
-3. Có OTP không?  
-Không.
+3. Có dùng mã xác thực một lần không?
+Không. Dự án hiện không có luồng mã xác thực một lần.
 
-4. Có xác minh email không?  
-Không có verification gate trong app hiện tại.
+4. Có chặn người dùng bằng bước xác thực email không?
+Không. Tài khoản email/password có thể vào app sau khi đăng ký hoặc đăng nhập thành công.
 
-5. Dữ liệu hành trình lưu ở đâu?  
-Local SQLite trên thiết bị ghi GPS; chuyến hoàn thành có thể đồng bộ lên Firestore.
+5. Dữ liệu hành trình lưu ở đâu?
+Thiết bị hiện tại lưu lịch sử bằng SQLite. Chuyến hoàn thành có thể đồng bộ summary và chunks lên Firestore.
 
-6. Firestore có lưu từng điểm GPS thành từng document không?  
-Không. Điểm GPS được gom thành chunk 150 điểm.
+6. Firestore có lưu từng điểm GPS thành từng document không?
+Không. Điểm GPS được gom thành chunks, mỗi chunk khoảng 150 điểm.
 
-7. Mất mạng có ghi hành trình không?  
-Có, local tracking vẫn ghi SQLite nếu GPS hoạt động.
+7. Vì sao cần SQLite nếu đã có Firestore?
+SQLite giúp app local-first, vẫn ghi được lịch sử khi mất mạng và phát lại local không phụ thuộc cloud.
 
-8. Mất mạng có xem bản đồ Fleet Map không?  
-Không render MapView khi offline; app hiển thị trạng thái offline.
+8. Mất mạng có ghi GPS không?
+Có, nếu GPS vẫn hoạt động thì app vẫn ghi SQLite.
 
-9. Playback local có cần đồng bộ không?  
-Không. Local playback đọc SQLite.
+9. Mất mạng có xem Fleet Map không?
+Fleet Map không render Google Map khi offline. App hiển thị trạng thái ngoại tuyến để tránh crash.
 
-10. Remote playback lấy dữ liệu từ đâu?  
-Firestore trip summary và gpsChunks.
+10. Dashboard offline hiển thị gì?
+Dashboard dùng cache gần nhất cho thiết bị và chỉ báo nguồn dữ liệu ngoại tuyến.
 
-11. Background tracking đã hoàn chỉnh chưa?  
-Chưa. Đây là phần partial.
+11. Tốc độ được tính như thế nào?
+Tốc độ được tính từ khoảng cách Haversine giữa hai tọa độ liên tiếp chia cho thời gian giữa hai điểm.
 
-12. Android notification có dùng push không?  
-Không. Nó là foreground-service notification của Expo Location.
+12. App có dùng `location.coords.speed` không?
+Có thể giữ như dữ liệu phụ, nhưng tốc độ chính trong tracking được tính từ tọa độ và timestamp.
 
-13. iOS có notification cố định như Android không?  
-Không.
+13. App xử lý GPS spike như thế nào?
+Điểm GPS bất thường bị từ chối, không lưu vào SQLite và không dùng để cập nhật tốc độ.
 
-14. Kick thiết bị có thu hồi Firebase token không?  
-Không. Cần backend Admin SDK để làm việc đó.
+14. Có giới hạn cứng tốc độ không?
+Không. App không biến tốc độ bất thường thành một giá trị tối đa giả; điểm sai bị loại.
 
-15. Có thể quản lý màu marker không?  
-Có trong màn Thiết bị của tôi.
+15. Paused sau bao lâu?
+Sau 30 giây không có chuyển động có ý nghĩa.
 
-16. Có thể đổi email không?  
-Không.
+16. Parking sau bao lâu?
+Sau 3 phút dừng.
 
-17. Có avatar không?  
-Không.
+17. Khi vào Paused có kết thúc chuyến không?
+Không. Chuyến chỉ kết thúc khi đủ điều kiện Parking.
 
-18. Có đổi mật khẩu không?  
-Có, cần nhập mật khẩu hiện tại.
+18. Playback local có cần đồng bộ không?
+Không. Playback local đọc trực tiếp từ SQLite.
 
-19. Có xóa tài khoản không?  
-Không.
+19. Remote playback lấy dữ liệu ở đâu?
+Từ Firestore trip summary và gpsChunks.
 
-20. Có xóa lịch sử thiết bị khác không?  
-Không.
+20. Nếu cloud chunks thiếu thì sao?
+App hiển thị trạng thái không có dữ liệu phù hợp, không nên crash.
 
-21. Tốc độ được tính như thế nào?  
-Từ khoảng cách Haversine giữa hai tọa độ liên tiếp và thời gian giữa chúng.
+21. Live Tracking khác Fleet Map thế nào?
+Live Tracking tập trung vào một thiết bị đang chọn. Fleet Map hiển thị nhiều thiết bị trên cùng bản đồ.
 
-22. App xử lý GPS nhảy bất thường ra sao?  
-Từ chối điểm invalid/spike thay vì hiển thị tốc độ bị clamp.
+22. `localDeviceId` là gì?
+Là ID của thiết bị vật lý đang chạy app và ghi GPS.
 
-23. Parking sau bao lâu?  
-3 phút dừng.
+23. `selectedDeviceId` là gì?
+Là thiết bị đang được xem trong Dashboard hoặc Live Tracking.
 
-24. Paused sau bao lâu?  
-30 giây dừng.
+24. `selectedHistoryDeviceId` là gì?
+Là thiết bị đang được xem lịch sử trong History.
 
-25. Có Google Maps không?  
-Có qua `react-native-maps`.
+25. Chọn thiết bị từ xa có làm đổi thiết bị ghi GPS không?
+Không. Ghi GPS luôn thuộc `localDeviceId`.
 
-26. Có cache không?  
-Có AsyncStorage cache cho hiển thị thiết bị/live location.
+26. App có notification theo dõi không?
+Có cho Android native build thông qua foreground-service notification của Expo Location.
 
-27. Có SQLite không?  
-Có, cho trips và gps_points.
+27. Thông báo đó có phải push notification không?
+Không. Nó là thông báo foreground service, không phải push từ server.
 
-28. Có thể xem nhiều thiết bị không?  
-Có, trong Dashboard, Live Tracking và Fleet Map.
+28. iOS có thông báo cố định giống Android không?
+Không. iOS không có foreground-service notification tương đương trong source hiện tại.
 
-29. Có cần Android Development Build không?  
-Cần để test foreground service, notification và một số quyền native.
+29. Expo Go có kiểm thử được foreground service không?
+Không đầy đủ. Cần Android Development Build hoặc EAS APK.
 
-30. Roadmap tiếp theo là gì?  
-Runtime acceptance, durable background tracking, backend security, geofence và cảnh báo.
+30. Tracking nền đã hoàn chỉnh chưa?
+Chưa. TaskManager đã có nhưng chưa phục hồi đầy đủ auth, localDeviceId và active trip khi runtime không còn hoạt động.
+
+31. App có quản lý thiết bị đang đăng nhập không?
+Có màn hình thiết bị đang đăng nhập và cơ chế app-level session flags.
+
+32. Kick thiết bị có thu hồi token Firebase thật không?
+Không. Việc này cần backend Admin SDK, hiện chưa có.
+
+33. Có đổi tên thiết bị không?
+Có. Người dùng có thể đổi tên thiết bị trong Settings hoặc quản lý thiết bị.
+
+34. Có đổi màu marker không?
+Có. Người dùng có thể đổi màu marker thiết bị trên Fleet Map và mini map bằng bảng chọn màu hoặc mã HEX. Ứng dụng không cho đổi kiểu icon marker và không đổi marker Playback.
+
+35. Có xóa tài khoản không?
+Không. Source hiện tại không có chức năng xóa tài khoản.
+
+36. Có xóa lịch sử thiết bị khác không?
+Không. Soft delete thiết bị không đồng nghĩa xóa toàn bộ lịch sử thiết bị khác.
+
+37. App có dùng Google Maps không?
+Có, thông qua `react-native-maps`, chủ yếu cho Fleet Map và Playback.
+
+38. Có cần bảo vệ Google Maps key không?
+Có. Hiện key nằm trong cấu hình app, production nên chuyển sang quản lý build-time an toàn hơn.
+
+39. Dự án phù hợp mở rộng theo hướng nào?
+Geofence, cảnh báo tốc độ, thống kê đội thiết bị, quản lý xe thuê, web dashboard và backend bảo mật.
+
+40. Điểm mạnh nhất của dự án là gì?
+Kiến trúc local-first kết hợp Firestore realtime, giúp app vừa ghi được dữ liệu khi offline vừa xem được nhiều thiết bị khi online.

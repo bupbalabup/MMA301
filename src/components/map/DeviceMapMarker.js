@@ -1,21 +1,22 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, radius, shadows, typography } from '../../theme';
+import { getSafeMarkerColor } from '../../utils/color';
 
 export default function DeviceMapMarker({
   isLocal,
   isOnline,
   isSelected = false,
+  markerColor,
   size = 'md',
 }) {
   const compact = size === 'sm';
-  const bodyColor = isOnline
-    ? isLocal ? colors.markerLocal : colors.markerRemote
-    : colors.markerOffline;
+  const bodyColor = getSafeMarkerColor(markerColor);
 
   return (
     <View
       accessibilityElementsHidden
+      collapsable={false}
       importantForAccessibility="no-hide-descendants"
       style={[
         styles.touchArea,
@@ -155,4 +156,3 @@ const styles = StyleSheet.create({
     width: 15,
   },
 });
-

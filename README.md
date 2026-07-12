@@ -1,153 +1,218 @@
 # Track Device
 
-![Track Device logo](src/assets/branding/logo-horizontal.png)
+![Logo Track Device](src/assets/branding/logo-horizontal.png)
 
-Track Device is a React Native + Expo GPS tracking application for monitoring one or more devices under the same Firebase account. The app records trips automatically on the local physical device, shows realtime device status through Firestore, supports local and cloud trip history, and provides route playback on Google Maps.
+Track Device là ứng dụng theo dõi vị trí thiết bị theo thời gian thực, được xây dựng bằng React Native, Expo, Firebase và SQLite. Ứng dụng hỗ trợ theo dõi nhiều thiết bị trong cùng một tài khoản, lưu lịch sử hành trình trên thiết bị, đồng bộ hành trình đã hoàn thành lên Firestore và phát lại tuyến đường trên Google Maps.
 
-The source currently targets Expo SDK 54, Android first, with iOS support present in configuration and UI flows. Runtime acceptance for several Android system behaviors still requires an Android Development Build or EAS APK.
+Đây là đồ án học tập trong workspace MMA301. Mục tiêu của dự án là xây dựng một nền tảng theo dõi vị trí có kiến trúc local-first, hoạt động được khi mất mạng và vẫn có khả năng đồng bộ dữ liệu khi kết nối trở lại.
 
-## Implemented Features
+## Giới Thiệu
 
-- Firebase Email/Password authentication with register, login, logout, and password change.
-- User profile document initialization in Firestore.
-- Local device registration with stable `localDeviceId` stored in AsyncStorage.
-- Multi-device account list from Firestore.
-- Dashboard with device counts, selected-device summary, current speed, max speed, stopped duration, today's distance, and mini map.
-- Live Tracking screen for local or selected remote device.
-- Fleet Map with all account devices that have valid live coordinates.
-- Automatic foreground GPS tracking through `expo-location`.
-- Coordinate-based speed calculation and GPS spike filtering.
-- Moving, Paused, Parking, GPS Lost, Online, and Offline state display.
-- Automatic trip creation and completion.
-- SQLite local trip and GPS point storage.
-- History grouped by date for local SQLite history and remote Firestore history.
-- Completed-trip cloud sync to Firestore trip summaries and GPS chunks.
-- Manual pending-trip sync and guarded retry after reconnect.
-- Trip Detail screen for local and cloud summaries.
-- Playback screen for local SQLite GPS points and remote Firestore GPS chunks.
-- AsyncStorage cache for device list and last-known live-location snapshots.
-- Connectivity context with online, offline, and checking states.
-- Android permission/setup wizard with foreground location, background permission readiness, notification permission, Auto Start guidance, and battery optimization guidance.
-- iOS permission/setup flow with foreground location, always-location prompt, notification guidance, and truthful background limitations.
-- Android foreground-service location task and persistent tracking notification in Development Build/APK environments.
-- Account and Security screens for profile, password change, signed-in devices, device preferences, notification preferences, sync status, and security logs.
-- Track Device branding assets, custom PNG icons, illustrations, and code-drawn map markers.
+Track Device tập trung vào các nhu cầu chính:
 
-## Partial or Limited Features
+- Theo dõi vị trí thiết bị theo thời gian thực.
+- Quản lý nhiều thiết bị trong cùng một tài khoản Firebase.
+- Ghi nhận hành trình tự động khi thiết bị di chuyển.
+- Lưu dữ liệu cục bộ bằng SQLite để không mất lịch sử khi mất mạng.
+- Đồng bộ hành trình đã hoàn thành lên Firestore để xem từ thiết bị khác.
+- Phát lại hành trình bằng bản đồ.
 
-- Android foreground service is wired through Expo Location and TaskManager, but durable background tracking is not fully accepted because the task forwards locations to the in-memory GPS listener pipeline and does not restore auth, `localDeviceId`, or active-trip state independently.
-- Per-device kick and logout-all are client-mediated through Firestore device-session flags. They do not revoke Firebase Auth refresh tokens globally because there is no Admin SDK backend.
-- Auto Start cannot be verified by a universal Android API. The app opens best-effort settings and can store manual user confirmation.
-- Battery optimization status uses the configured native plugin path, but final behavior must be verified in an Android Development Build or APK.
-- No production screenshot set exists in the repository yet.
+Ứng dụng ưu tiên Android, đồng thời có cấu hình và một số luồng giao diện cho iOS. Một số hành vi native như foreground service, thông báo theo dõi và quyền chạy nền cần kiểm thử bằng Android Development Build hoặc EAS APK, không thể xác nhận đầy đủ chỉ bằng Expo Go.
 
-## Not Implemented
+## Tính Năng
 
-- Camera, dashcam, video, FFmpeg, AI, driver scoring, geofencing, speed alerts, maintenance reminders, backend Admin SDK, Cloud Functions, push notification backend, and fully durable background GPS restoration.
+### Đã Triển Khai
 
-## Screenshots
+- Đăng ký bằng email và mật khẩu.
+- Đăng nhập bằng email và mật khẩu.
+- Đăng xuất.
+- Đổi mật khẩu sau khi xác thực lại.
+- Khởi tạo hồ sơ người dùng trên Firestore.
+- Đăng ký thiết bị cục bộ với `localDeviceId` ổn định.
+- Quản lý nhiều thiết bị trong cùng tài khoản.
+- Dashboard hiển thị tổng thiết bị, thiết bị trực tuyến, thiết bị mất kết nối, bản đồ nhỏ và thông tin thiết bị đang chọn.
+- Bottom Tab Navigation với bốn tab: Trang chủ, Bản đồ, Lịch sử và Cài đặt.
+- Live Tracking cho thiết bị hiện tại hoặc thiết bị từ xa được chọn.
+- Fleet Map hiển thị nhiều thiết bị trên một bản đồ.
+- Theo dõi GPS foreground bằng `expo-location`.
+- Tính tốc độ từ tọa độ GPS và timestamp.
+- Lọc điểm GPS bất thường.
+- Phân biệt trạng thái di chuyển, tạm dừng, đỗ xe và mất GPS.
+- Tạo chuyến tự động khi có chuyển động.
+- Hoàn tất chuyến tự động khi đủ thời gian đỗ xe.
+- Lưu chuyến và điểm GPS bằng SQLite.
+- Lịch sử hành trình theo ngày.
+- Lịch sử cục bộ cho thiết bị hiện tại.
+- Lịch sử đám mây cho thiết bị từ xa.
+- Đồng bộ chuyến hoàn thành lên Firestore bằng trip summary và GPS chunks.
+- Đồng bộ thủ công các chuyến đang chờ.
+- Tự thử đồng bộ lại một lần khi có mạng trở lại.
+- Màn hình chi tiết chuyến.
+- Playback từ SQLite hoặc từ Firestore GPS chunks.
+- Cache AsyncStorage cho danh sách thiết bị và dữ liệu live gần nhất.
+- ConnectivityContext với trạng thái online, offline và checking.
+- Permission Wizard cho Android và iOS.
+- Thông báo foreground service cho tracking trên Android native build.
+- Hồ sơ tài khoản.
+- Thiết bị đang đăng nhập.
+- Quản lý thiết bị của tôi.
+- Đổi màu marker thiết bị trên bản đồ trực tiếp bằng bảng chọn màu và mã HEX.
+- Tuỳ chọn thông báo trong ứng dụng.
+- Màn hình trạng thái đồng bộ.
+- Nhật ký bảo mật.
+- Bộ nhận diện Track Device, icon PNG tuỳ chỉnh, illustration và marker tự vẽ.
 
-Place runtime screenshots in a future `screenshots/` directory:
+### Đang Hoàn Thiện
 
-- `screenshots/dashboard.png`
-- `screenshots/live-tracking.png`
-- `screenshots/fleet-map.png`
-- `screenshots/history.png`
-- `screenshots/trip-detail.png`
-- `screenshots/playback.png`
-- `screenshots/settings.png`
-- `screenshots/permission-wizard.png`
-- `screenshots/account.png`
+- Theo dõi nền bền vững bằng TaskManager mới ở mức một phần. TaskManager đã được cấu hình, nhưng pipeline hiện tại vẫn phụ thuộc vào listener trong bộ nhớ khi xử lý vị trí nền.
+- Kick thiết bị và đăng xuất tất cả thiết bị đang ở mức client-mediated qua Firestore. Dự án chưa có backend Admin SDK để thu hồi Firebase refresh token toàn cục.
+- Auto Start trên Android không có API kiểm tra chung cho mọi hãng. Ứng dụng chỉ mở cài đặt phù hợp nhất và cho phép người dùng xác nhận thủ công.
+- Kiểm tra tối ưu pin phụ thuộc native build và cần xác nhận trên thiết bị thật.
+- Bộ ảnh chụp màn hình chính thức chưa có trong repository.
 
-## Tech Stack
+### Chưa Triển Khai
 
-| Area | Technology |
+- Camera.
+- Dashcam.
+- Video.
+- FFmpeg.
+- AI.
+- Chấm điểm tài xế.
+- Geofence.
+- Cảnh báo tốc độ.
+- Nhắc bảo trì.
+- Backend Admin SDK.
+- Cloud Functions.
+- Push notification backend.
+- Khôi phục tracking nền hoàn toàn khi React runtime không còn hoạt động.
+
+## Công Nghệ
+
+| Nhóm | Công nghệ |
 | --- | --- |
-| App runtime | React Native 0.81.5, React 19.1.0 |
+| Ứng dụng | React Native 0.81.5 |
 | Framework | Expo SDK 54 |
-| Navigation | `@react-navigation/native`, native stack |
-| Auth | Firebase Auth Email/Password |
+| Điều hướng | `@react-navigation/native`, native stack, bottom tabs |
+| Xác thực | Firebase Auth Email/Password |
 | Cloud database | Cloud Firestore |
 | Local database | `expo-sqlite` |
-| Maps | `react-native-maps` / Google Maps on Android |
-| Location | `expo-location` |
-| Background task primitive | `expo-task-manager` |
-| Device metadata | `expo-device`, React Native `Platform` |
-| Local storage/cache | `@react-native-async-storage/async-storage` |
+| Bản đồ | `react-native-maps`, Google Maps trên Android |
+| Vị trí | `expo-location` |
+| Tác vụ nền | `expo-task-manager` |
+| Thông tin thiết bị | `expo-device`, React Native `Platform` |
+| Cache | `@react-native-async-storage/async-storage` |
 | Safe area | `react-native-safe-area-context` |
 
-## Folder Structure
+## Kiến Trúc
+
+Ứng dụng được chia theo các lớp rõ ràng:
+
+- `screens`: giao diện người dùng.
+- `contexts`: trạng thái runtime dùng chung.
+- `services`: Firebase, tracking, location, network, cache và thiết bị.
+- `repositories`: truy vấn SQLite.
+- `components`: UI dùng chung, branding, icon, marker và form.
+- `utils`: định dạng, timestamp và xử lý địa lý.
+- `constants`: route, tracking, history và cấu hình dùng chung.
+
+Provider chính trong `App.js`:
 
 ```text
-Track Device
-├── App.js
-├── app.json
-├── eas.json
-├── package.json
-├── plugins/
-│   └── withTrackDeviceBatteryOptimization.js
-├── scripts/
-│   └── generate_brand_assets.ps1
-└── src/
-    ├── assets/
-    │   ├── branding/
-    │   ├── icons/
-    │   └── illustrations/
-    ├── components/
-    │   ├── branding/
-    │   ├── icons/
-    │   ├── map/
-    │   ├── security/
-    │   └── ui/
-    ├── constants/
-    ├── contexts/
-    ├── database/
-    │   ├── migrations/
-    │   └── repositories/
-    ├── hooks/
-    ├── navigation/
-    ├── screens/
-    │   ├── account/
-    │   ├── auth/
-    │   ├── history/
-    │   ├── main/
-    │   ├── settings/
-    │   ├── setup/
-    │   └── tracking/
-    ├── services/
-    │   ├── cache/
-    │   ├── device/
-    │   ├── firebase/
-    │   ├── location/
-    │   ├── network/
-    │   └── tracking/
-    ├── theme/
-    ├── types/
-    └── utils/
+SafeAreaProvider
+  AppBootstrap
+    ConnectivityProvider
+      AuthProvider
+        PermissionSetupProvider
+          DeviceProvider
+            TrackingProvider
+              LiveDeviceProvider
+                RootNavigator
 ```
 
-## Installation
+Người dùng chưa đăng nhập sẽ vào `AuthNavigator`. Người dùng đã đăng nhập sẽ đi qua Permission Wizard nếu chưa hoàn tất thiết lập, sau đó vào hệ thống chính. Điều hướng chính dùng bốn tab đúng thứ tự: Trang chủ, Bản đồ, Lịch sử và Cài đặt. Live Tracking, Trip Detail, Playback và các màn phụ vẫn nằm trong Native Stack.
+
+## Cấu Trúc Project
+
+```text
+MMA301/
+  App.js
+  app.json
+  eas.json
+  package.json
+  plugins/
+    withTrackDeviceBatteryOptimization.js
+  scripts/
+    generate_brand_assets.ps1
+  src/
+    assets/
+      branding/
+      icons/
+      illustrations/
+    components/
+      branding/
+      icons/
+      map/
+      security/
+      ui/
+    constants/
+    contexts/
+    database/
+      migrations/
+      repositories/
+    hooks/
+    navigation/
+    screens/
+      account/
+      auth/
+      history/
+      main/
+      settings/
+      setup/
+      tracking/
+    services/
+      cache/
+      device/
+      firebase/
+      location/
+      network/
+      tracking/
+    theme/
+    types/
+    utils/
+```
+
+## Hướng Dẫn Cài Đặt
 
 ```bash
 git clone <repository-url>
 cd MMA301
 npm install
 cp .env.example .env
+npx expo install @react-navigation/bottom-tabs
 npx expo start
 ```
 
-For native Android behavior:
+Chạy Android native build trong môi trường phát triển:
 
 ```bash
 npx expo run:android
+```
+
+Tạo bản preview APK bằng EAS:
+
+```bash
 eas build --platform android --profile preview
 ```
 
-The `preview` EAS profile builds an internal APK.
+## Build
 
-## Environment Variables
+`eas.json` có profile preview tạo APK nội bộ cho Android. Đây là lựa chọn phù hợp để kiểm thử các phần cần native build như foreground service, thông báo theo dõi và một số quyền Android.
 
-Create `.env` from `.env.example` and provide:
+Các bản build production cần kiểm tra lại biến môi trường, Google Maps API key, Firebase config và chính sách bảo mật trước khi phát hành.
+
+## Biến Môi Trường
+
+Tạo `.env` từ `.env.example` và cung cấp các biến sau:
 
 ```text
 EXPO_PUBLIC_FIREBASE_API_KEY=
@@ -158,80 +223,86 @@ EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 EXPO_PUBLIC_FIREBASE_APP_ID=
 ```
 
-The current `app.json` also contains Android Google Maps configuration. That key should be moved to build-time configuration before public distribution.
+Lưu ý: cấu hình Google Maps Android hiện vẫn nằm trong `app.json`. Trước khi public repository hoặc phát hành production, nên chuyển key này sang cấu hình build an toàn hơn.
 
-## Android Permissions
+## Quyền Android
 
-The app requests or configures:
+Ứng dụng cấu hình các quyền chính:
 
-- `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` for foreground GPS.
-- `ACCESS_BACKGROUND_LOCATION` for background-location readiness.
-- `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION` for Android foreground-service location updates.
-- `POST_NOTIFICATIONS` for Android 13+ notification permission.
+- `ACCESS_FINE_LOCATION`: lấy vị trí chính xác.
+- `ACCESS_COARSE_LOCATION`: lấy vị trí gần đúng.
+- `ACCESS_BACKGROUND_LOCATION`: chuẩn bị cho quyền vị trí nền.
+- `FOREGROUND_SERVICE`: foreground service.
+- `FOREGROUND_SERVICE_LOCATION`: foreground service cho vị trí.
+- `POST_NOTIFICATIONS`: quyền thông báo trên Android 13 trở lên.
 
-The permission wizard distinguishes required location/notification checks from recommended Auto Start and battery optimization guidance.
+Permission Wizard phân biệt quyền bắt buộc và các thiết lập khuyến nghị như Auto Start hoặc tối ưu pin.
 
-## Provider Architecture
+## Ảnh Giao Diện
 
-Actual provider order in `App.js`:
-
-```text
-SafeAreaProvider
-  AppBootstrap
-    ConnectivityProvider
-      AuthProvider
-        PermissionSetupProvider       only after authentication
-          DeviceProvider              only after setup is complete
-            TrackingProvider
-              LiveDeviceProvider
-                RootNavigator
-```
-
-Unauthenticated users enter `AuthNavigator`. Authenticated users pass through `PermissionSetupProvider`; if setup is incomplete, the wizard renders before the main app providers mount.
-
-## Tracking Flow
+Repository chưa có bộ ảnh chụp màn hình chính thức. Khi bổ sung ảnh, nên đặt theo cấu trúc:
 
 ```text
-Auth ready
-DeviceContext resolves localDeviceId
-TrackingContext initializes TrackingEngine with uid + localDeviceId
-TrackingContext auto-enables tracking
-GpsEngine starts foreground GPS watching
-TrackingEngine validates GPS points
-TrackingEngine calculates speed from consecutive accepted points
-TrackingEngine creates or updates an active SQLite trip
-TrackingEngine publishes liveLocation/current when Firestore is reachable
-Parking completion finalizes the trip and queues cloud sync
+screenshots/dashboard.png
+screenshots/live-tracking.png
+screenshots/fleet-map.png
+screenshots/history.png
+screenshots/trip-detail.png
+screenshots/playback.png
+screenshots/settings.png
+screenshots/permission-wizard.png
+screenshots/account.png
 ```
 
-## Sync Flow
+## Luồng Tracking
 
 ```text
-Completed local SQLite trip
-Load bounded GPS points between trip.startTime and trip.endTime
-Upload Firestore trip summary
-Upload GPS chunks of 150 points each
-Mark local trip cloudSyncStatus as synced
-If upload fails, mark failed and keep SQLite data
-Retry manually from History/Sync screen or once after reconnect
+Đăng nhập thành công
+Khởi tạo thiết bị cục bộ
+TrackingContext khởi tạo TrackingEngine
+GpsEngine nhận vị trí
+TrackingEngine kiểm tra điểm GPS
+Tính tốc độ từ tọa độ và thời gian
+Lưu điểm hợp lệ vào SQLite
+Cập nhật liveLocation/current lên Firestore nếu có mạng
+Hoàn tất chuyến khi đủ điều kiện đỗ xe
+Đưa chuyến vào hàng chờ đồng bộ
 ```
 
-## Offline Strategy
+## Luồng Đồng Bộ
 
-SQLite remains the source of truth for local trip history and local playback. AsyncStorage caches the device list and last-known live-location display snapshots for offline UI. Firestore failures do not stop local GPS processing. When connectivity returns, pending completed trips can be retried.
+```text
+Chuyến hoàn thành trong SQLite
+Lấy điểm GPS trong khoảng startTime đến endTime
+Upload trip summary lên Firestore
+Upload gpsChunks với 150 điểm mỗi chunk
+Đánh dấu chuyến là đã đồng bộ nếu thành công
+Giữ trạng thái chờ hoặc thất bại nếu upload lỗi
+Cho phép thử lại thủ công hoặc tự thử lại sau khi có mạng
+```
 
-## Current Roadmap
+## Chiến Lược Offline
 
-- Runtime acceptance on Android Development Build / EAS APK.
-- Durable background tracking that restores auth/device/trip context inside the TaskManager pipeline.
-- Backend-based session revocation and stronger device ownership checks.
-- Secure build-time Google Maps key management.
-- Geofencing, speed alerts, statistics, and fleet/rental workflows.
+SQLite là nguồn dữ liệu chính cho lịch sử và playback của thiết bị hiện tại. AsyncStorage lưu cache danh sách thiết bị và snapshot live-location gần nhất để giao diện vẫn có dữ liệu khi mất mạng. Khi Firestore lỗi, tracking local không bị dừng. Khi có mạng lại, các chuyến hoàn thành có thể được đồng bộ.
 
-## License
+## Roadmap
 
-No license file is currently present in the repository.
+Các hướng phát triển tiếp theo bắt đầu từ trạng thái source code hiện tại:
 
-## Author
+- Kiểm thử runtime đầy đủ trên Android Development Build hoặc EAS APK.
+- Hoàn thiện tracking nền bền vững, có khả năng khôi phục auth, thiết bị và active trip trong TaskManager.
+- Bổ sung backend bảo mật để thu hồi session thật sự.
+- Quản lý Google Maps API key bằng cấu hình build an toàn.
+- Geofence.
+- Cảnh báo tốc độ.
+- Thống kê đội thiết bị.
+- Quy trình quản lý xe thuê hoặc tài sản di động.
+- Web dashboard.
 
-Track Device is maintained as part of the MMA301 project workspace.
+## Giấy Phép
+
+Repository hiện chưa có file license riêng. Nếu cần công bố mã nguồn, nên bổ sung license rõ ràng, ví dụ MIT hoặc license do nhóm dự án lựa chọn.
+
+## Tác Giả
+
+Track Device được phát triển trong workspace MMA301 cho mục đích học tập và trình bày đồ án.

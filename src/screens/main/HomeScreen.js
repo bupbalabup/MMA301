@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,8 +6,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BrandMark, EmptyStateIllustration } from '../../components/branding';
 import { TrackIcon } from '../../components/icons';
 import { DeviceMapMarker, MapErrorBoundary } from '../../components/map';
-import { StatusBadge } from '../../components/ui';
-import { MainRoutes } from '../../constants/routes';
+import { AppHeader, StatusBadge } from '../../components/ui';
+import { MainRoutes, TabRoutes } from '../../constants/routes';
 import {
   useAuth,
   useConnectivity,
@@ -26,9 +26,19 @@ import {
   getDeviceName,
 } from '../../utils/format';
 
-function HeroCard({ connectionStatus, deviceName, isLocal, speedKmh, status }) {
+function HeroCard({ connectionStatus, deviceName, isLocal, onPress, speedKmh, status }) {
   return (
-    <View style={[styles.heroCard, shadows.cardMedium]}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.heroCard,
+        shadows.cardMedium,
+        pressed && styles.pressed,
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Xem chi tiết theo dõi trực tiếp"
+      hitSlop={4}
+    >
       <View style={styles.heroTop}>
         <View style={styles.heroDeviceRow}>
           <Text style={styles.heroDeviceName} numberOfLines={2}>{deviceName}</Text>
@@ -49,7 +59,8 @@ function HeroCard({ connectionStatus, deviceName, isLocal, speedKmh, status }) {
       <View style={styles.heroStatusRow}>
         <StatusBadge status={status} label={formatStatus(status)} />
       </View>
-    </View>
+      <Text style={styles.heroDetailAction}>Xem chi tiết</Text>
+    </Pressable>
   );
 }
 
@@ -62,26 +73,6 @@ function QuickMetric({ icon, label, value }) {
       </View>
       <Text style={styles.quickMetricValue}>{value}</Text>
     </View>
-  );
-}
-
-function ActionCard({ description, icon, onPress, title }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.actionCard, shadows.card, pressed && styles.pressed]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      hitSlop={4}
-    >
-      <View style={styles.actionIconWrap}>
-        <TrackIcon name={icon} size={28} />
-      </View>
-      <View style={styles.actionTextWrap}>
-        <Text style={styles.actionTitle}>{title}</Text>
-        <Text style={styles.actionDescription}>{description}</Text>
-      </View>
-    </Pressable>
   );
 }
 
@@ -144,6 +135,7 @@ export default function HomeScreen({ navigation }) {
     liveLocation,
     selectedFleetDevice,
   } = useLiveDevice();
+  const [trackMiniMarkerChanges, setTrackMiniMarkerChanges] = useState(true);
 
   const selectedDeviceName =
     getDeviceName(selectedDevice) ||
@@ -176,6 +168,15 @@ export default function HomeScreen({ navigation }) {
     () => fleetDevices.filter((item) => item.hasValidCoordinate),
     [fleetDevices]
   );
+  const miniMarkerAppearanceKey = validFleetDevices
+    .map((item) => `${item.deviceId}:${item.isOnline}:${item.markerColor ?? ''}`)
+    .join('|');
+
+  useEffect(() => {
+    setTrackMiniMarkerChanges(true);
+    const timerId = setTimeout(() => setTrackMiniMarkerChanges(false), 500);
+    return () => clearTimeout(timerId);
+  }, [miniMarkerAppearanceKey]);
   const totalDeviceCount = devices.length > 0 ? devices.length : localDeviceId ? 1 : 0;
   const onlineCount = isOnline === false
     ? 0
@@ -193,12 +194,33 @@ export default function HomeScreen({ navigation }) {
   }, [validFleetDevices]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.md }]}
         showsVerticalScrollIndicator={false}
       >
+        <AppHeader
+          mode="transparent"
+          title="Track Device"
+          subtitle={user?.email ?? ''}
+          rightSlot={(
+            <View style={styles.localChip}>
+              <View style={styles.localChipDot} />
+              <Text style={styles.localChipText} numberOfLines={2}>
+                {localDeviceName || 'Thiáº¿t bá»‹ nÃ y'}
+              </Text>
+            </View>
+          )}
+        />
+        <HeroCard
+          deviceName={selectedDeviceName}
+          isLocal={isViewingLocalDevice}
+          connectionStatus={displayConnectionStatus}
+          onPress={() => navigation.getParent()?.navigate(MainRoutes.LiveTracking)}
+          speedKmh={displaySpeedKmh}
+          status={displayStatus}
+        />
         <View style={styles.appHeader}>
           <BrandMark size={48} style={styles.headerBrand} />
           <View style={styles.headerText}>
@@ -258,11 +280,12 @@ export default function HomeScreen({ navigation }) {
                     anchor={{ x: 0.5, y: 0.5 }}
                     accessibilityLabel={`${item.name || 'Thiết bị'}, ${item.isOnline ? 'Trực tuyến' : `Mất kết nối ${formatLostConnectionDuration(item.lostConnectionDurationMs)}`}, ${formatStatus(item.liveLocation?.movementStatus ?? item.liveLocation?.status)}`}
                     accessible
-                    tracksViewChanges={false}
+                    tracksViewChanges={trackMiniMarkerChanges}
                   >
                     <DeviceMapMarker
                       isLocal={item.isLocalDevice}
                       isOnline={item.isOnline}
+                      markerColor={item.markerColor}
                       size="sm"
                     />
                   </Marker>
@@ -272,7 +295,7 @@ export default function HomeScreen({ navigation }) {
           )}
           <Pressable
             style={({ pressed }) => [styles.mapAction, pressed && styles.pressed]}
-            onPress={() => navigation.navigate(MainRoutes.FleetMap)}
+            onPress={() => navigation.navigate(TabRoutes.MapTab)}
             accessibilityRole="button"
             accessibilityLabel="Xem bản đồ thiết bị"
             hitSlop={4}
@@ -310,6 +333,7 @@ export default function HomeScreen({ navigation }) {
           deviceName={selectedDeviceName}
           isLocal={isViewingLocalDevice}
           connectionStatus={displayConnectionStatus}
+          onPress={() => navigation.getParent()?.navigate(MainRoutes.LiveTracking)}
           speedKmh={displaySpeedKmh}
           status={displayStatus}
         />
@@ -340,23 +364,12 @@ export default function HomeScreen({ navigation }) {
             }
           />
         </View>
-
-        <Text style={styles.sectionLabel}>ĐIỀU HƯỚNG</Text>
-        <ActionCard icon="liveMap" title="Theo dõi trực tiếp" description="Xem trạng thái và dữ liệu chi tiết của thiết bị đang chọn." onPress={() => navigation.navigate(MainRoutes.LiveTracking)} />
-        <ActionCard icon="location" title="Bản đồ tất cả thiết bị" description="Xem vị trí mới nhất của các thiết bị trong tài khoản." onPress={() => navigation.navigate(MainRoutes.FleetMap)} />
-        <ActionCard icon="history" title="Lịch sử hành trình" description="Xem các chuyến đi đã lưu hoặc đã đồng bộ." onPress={() => navigation.navigate(MainRoutes.History)} />
-        <ActionCard icon="settings" title="Cài đặt" description="Quản lý thiết bị, quyền truy cập và theo dõi tự động." onPress={() => navigation.navigate(MainRoutes.Settings)} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  actionCard: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.medium, flexDirection: 'row', marginTop: spacing.sm, padding: spacing.lg },
-  actionIconWrap: { alignItems: 'center', backgroundColor: colors.primarySoft, borderRadius: radius.medium, height: 48, justifyContent: 'center', marginRight: spacing.md, width: 48 },
-  actionDescription: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
-  actionTextWrap: { flex: 1 },
-  actionTitle: { ...typography.cardTitle, color: colors.textPrimary },
   appEmail: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   appHeader: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
   appName: { ...typography.screenTitle, color: colors.textPrimary },
@@ -375,6 +388,7 @@ const styles = StyleSheet.create({
   heroCard: { backgroundColor: colors.textPrimary, borderRadius: radius.large, marginBottom: spacing.sm, padding: spacing.xl },
   heroDeviceName: { ...typography.cardTitle, color: colors.surface, flex: 1, marginRight: spacing.sm },
   heroDeviceRow: { alignItems: 'center', flex: 1, flexDirection: 'row', flexWrap: 'wrap', marginRight: spacing.sm },
+  heroDetailAction: { ...typography.button, color: colors.primarySoft, marginTop: spacing.md },
   heroSpeedLabel: { ...typography.label, color: colors.textMuted, marginTop: spacing.xs },
   heroSpeedValue: { color: colors.surface, fontSize: 48, fontWeight: '900', letterSpacing: 0, marginTop: spacing.lg },
   heroStatusRow: { marginTop: spacing.md },

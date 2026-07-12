@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from './firebaseConfig';
+import { normalizeHexColor } from '../../utils/color';
 
 function userDoc(uid) {
   return doc(db, 'users', uid);
@@ -100,11 +101,11 @@ export async function updateDevicePreferences(uid, deviceId, data) {
   }
 
   if (data.markerColor !== undefined) {
-    updates.markerColor = data.markerColor;
-  }
-
-  if (data.markerIcon !== undefined) {
-    updates.markerIcon = data.markerIcon;
+    const normalizedMarkerColor = normalizeHexColor(data.markerColor);
+    if (!normalizedMarkerColor) {
+      throw new Error('Invalid marker color.');
+    }
+    updates.markerColor = normalizedMarkerColor;
   }
 
   await updateDoc(deviceDoc(uid, deviceId), updates);
