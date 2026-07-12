@@ -1,12 +1,13 @@
 import { APP_VERSION } from '../../constants/app';
 import { timestampToMillis } from '../../utils/timestamp';
 import { EMPTY_VALUE, formatDateTime } from '../../utils/format';
+import { colors } from '../../theme';
 
 export const MARKER_COLORS = [
-  { label: 'Xanh dương', value: '#1D6FEB' },
-  { label: 'Xanh lá', value: '#16A34A' },
-  { label: 'Cam', value: '#EA580C' },
-  { label: 'Đỏ', value: '#DC2626' },
+  { label: 'Xanh dương', value: colors.primary },
+  { label: 'Xanh lá', value: colors.moving },
+  { label: 'Cam', value: colors.parking },
+  { label: 'Đỏ', value: colors.danger },
 ];
 
 export const MARKER_ICONS = [

@@ -30,6 +30,10 @@ import {
   requestNotificationPermission,
 } from '../../services/device/deviceSetupService';
 import {
+  logSecurityEvent,
+  SECURITY_ACTIONS,
+} from '../../services/firebase/accountSecurityService';
+import {
   requestBackgroundPermission,
   requestForegroundPermission,
 } from '../../services/location/locationPermissionService';
@@ -94,6 +98,7 @@ export default function SettingsScreen({ navigation }) {
     localDeviceId,
     localDeviceName,
     loading: deviceLoading,
+    selectedDevice,
     setLocalDeviceName,
   } = useDevice();
   const {
@@ -225,6 +230,23 @@ export default function SettingsScreen({ navigation }) {
     } finally {
       setSavingDeviceName(false);
     }
+  }
+
+  async function handleLogout() {
+    try {
+      if (user?.uid) {
+        await logSecurityEvent(user.uid, {
+          action: SECURITY_ACTIONS.LOGOUT,
+          deviceId: localDeviceId,
+          deviceName: localDeviceName,
+          platform: selectedDevice?.platform,
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to log logout event.', error);
+    }
+
+    await logout();
   }
 
   return (
@@ -394,9 +416,38 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </Section>
 
+        <Section icon="settings" title="Tài khoản và bảo mật">
+          <View style={styles.buttonGroup}>
+            <SecondaryButton
+              label="Hồ sơ tài khoản"
+              onPress={() => navigation.navigate(MainRoutes.Account)}
+            />
+            <SecondaryButton
+              label="Thiết bị đang đăng nhập"
+              onPress={() => navigation.navigate(MainRoutes.SignedInDevices)}
+            />
+            <SecondaryButton
+              label="Thiết bị của tôi"
+              onPress={() => navigation.navigate(MainRoutes.MyDevices)}
+            />
+            <SecondaryButton
+              label="Thông báo"
+              onPress={() => navigation.navigate(MainRoutes.NotificationPreferences)}
+            />
+            <SecondaryButton
+              label="Đồng bộ"
+              onPress={() => navigation.navigate(MainRoutes.SyncStatus)}
+            />
+            <SecondaryButton
+              label="Nhật ký hoạt động"
+              onPress={() => navigation.navigate(MainRoutes.SecurityLog)}
+            />
+          </View>
+        </Section>
+
         <Section icon="settings" title="Tài khoản">
           <InfoRow label="Email" value={user?.email ?? 'Không xác định'} last />
-          <DangerButton label="Đăng xuất" onPress={logout} style={styles.fieldButton} />
+          <DangerButton label="Đăng xuất" onPress={handleLogout} style={styles.fieldButton} />
         </Section>
 
         <Section icon="location" title="Về ứng dụng">

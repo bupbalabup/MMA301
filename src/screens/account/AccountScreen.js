@@ -15,6 +15,7 @@ import {
   SECURITY_ACTIONS,
   updateUserAccountProfile,
 } from '../../services/firebase/accountSecurityService';
+import { updateCurrentUserDisplayName } from '../../services/firebase/authService';
 import { colors, radius, spacing, typography } from '../../theme';
 import { formatDateTime } from '../../utils/format';
 import { getPlatformLabel } from './accountHelpers';
@@ -65,8 +66,10 @@ export default function AccountScreen() {
     setMessage('');
     setError('');
     try {
+      const trimmedDisplayName = displayName.trim();
+      await updateCurrentUserDisplayName(trimmedDisplayName || null);
       await updateUserAccountProfile(user.uid, {
-        displayName: displayName.trim() || null,
+        displayName: trimmedDisplayName || null,
       });
       setMessage('Đã lưu tên hiển thị.');
     } catch (saveError) {

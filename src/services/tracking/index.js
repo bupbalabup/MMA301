@@ -20,6 +20,7 @@ export {
   syncCompletedTripById,
   syncPendingTrips,
 } from './tripCloudSyncService';
+export { getLocalSyncStatus } from './syncStatusService';
 export {
   configureTrackingNotification,
   disableTracking,

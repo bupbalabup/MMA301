@@ -6,6 +6,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   updatePassword,
+  updateProfile,
 } from 'firebase/auth';
 
 import { auth } from './firebaseConfig';
@@ -69,6 +70,21 @@ export async function changeCurrentUserPassword(currentPassword, newPassword) {
     return user;
   } catch (error) {
     throw createAuthError('đổi mật khẩu', error);
+  }
+}
+
+export async function updateCurrentUserDisplayName(displayName) {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error('Không tìm thấy phiên đăng nhập hiện tại.');
+  }
+
+  try {
+    await updateProfile(user, { displayName: displayName || null });
+    return user;
+  } catch (error) {
+    throw createAuthError('cập nhật tên hiển thị', error);
   }
 }
 

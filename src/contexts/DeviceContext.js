@@ -82,6 +82,10 @@ function normalizeDeviceList(devices) {
     const normalizedDevice = normalizeDevice(device);
     const deviceId = normalizedDevice?.deviceId ?? normalizedDevice?.id;
 
+    if (normalizedDevice?.status === 'deleted') {
+      return;
+    }
+
     if (deviceId && !devicesById.has(deviceId)) {
       devicesById.set(deviceId, normalizedDevice);
     }
@@ -193,6 +197,15 @@ export function DeviceProvider({ children }) {
 
         createOrUpdateDevice(uid, nextLocalDeviceId, registrationData)
           .then(() => {
+            logSecurityEvent(uid, {
+              action: SECURITY_ACTIONS.LOGIN,
+              deviceId: nextLocalDeviceId,
+              deviceName: registrationData.name ?? knownLocalName ?? DEFAULT_DEVICE_NAME,
+              platform: CURRENT_PLATFORM,
+            }).catch((logError) => {
+              console.warn('Failed to log login event.', logError);
+            });
+
             if (!existingDeviceResult.device) {
               logSecurityEvent(uid, {
                 action: SECURITY_ACTIONS.ADD_DEVICE,

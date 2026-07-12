@@ -7,6 +7,7 @@ export {
   reauthenticateWithPassword,
   registerWithEmail,
   subscribeToAuthChanges,
+  updateCurrentUserDisplayName,
 } from './authService';
 export {
   createUserProfile,
