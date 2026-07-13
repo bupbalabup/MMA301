@@ -8,7 +8,6 @@ export default function SettingsListItem({
   destructive = false,
   icon,
   onPress,
-  showDisclosure = true,
   subtitle,
   title,
   value,
@@ -40,15 +39,6 @@ export default function SettingsListItem({
         {subtitle ? <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
       </View>
       {value ? <Text style={styles.value} numberOfLines={1}>{value}</Text> : null}
-      {showDisclosure && onPress ? (
-        <Text
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          style={styles.disclosure}
-        >
-          {'>'}
-        </Text>
-      ) : null}
     </Pressable>
   );
 }
@@ -59,11 +49,6 @@ const styles = StyleSheet.create({
   },
   dangerText: {
     color: colors.danger,
-  },
-  disclosure: {
-    ...typography.cardTitle,
-    color: colors.textMuted,
-    marginLeft: spacing.xs,
   },
   iconBox: {
     alignItems: 'center',

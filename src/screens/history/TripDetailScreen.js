@@ -167,7 +167,6 @@ export default function TripDetailScreen({ route }) {
           <View style={styles.heroTop}>
             <View style={styles.heroTextBlock}>
               <Text style={styles.heroDate}>{formatDate(trip.date)}</Text>
-              <Text style={styles.heroTitle}>Chi tiết chuyến đi</Text>
               <Text style={styles.heroSource}>
                 {isCloudSource ? 'Đồng bộ từ đám mây' : 'Lưu trên thiết bị này'}
               </Text>
@@ -356,11 +355,6 @@ const styles = StyleSheet.create({
   heroTextBlock: {
     flex: 1,
     paddingRight: spacing.sm,
-  },
-  heroTitle: {
-    ...typography.sectionTitle,
-    color: colors.surface,
-    marginTop: 2,
   },
   heroTop: {
     alignItems: 'flex-start',

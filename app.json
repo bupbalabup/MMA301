@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "Track Device",
+    "slug": "trackcam",
+    "version": "1.0.0",
+    "icon": "./src/assets/branding/app-icon.png",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "androidForegroundServiceIcon": "./src/assets/branding/notification-foreground-icon.png",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "./plugins/withTrackDeviceBatteryOptimization"
+    ],
+    "android": {
+      "package": "com.danghieu.trackcam",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/branding/adaptive-icon-foreground.png",
+        "backgroundColor": "#F4F6FA",
+        "monochromeImage": "./src/assets/branding/logo-mono-dark.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "ios": {
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Track Device cần quyền vị trí để hiển thị vị trí thiết bị và ghi lại hành trình khi bạn sử dụng ứng dụng.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Track Device cần quyền vị trí luôn luôn để chuẩn bị theo dõi vị trí khi ứng dụng chạy nền. Tính năng theo dõi nền chỉ hoạt động trong bản cài đặt hỗ trợ."
+      }
+    },
+    "splash": {
+      "image": "./src/assets/branding/splash-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F4F6FA"
+    },
+    "web": {
+      "favicon": "./src/assets/branding/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9b7f9a79-c164-4392-97df-854188ae7382"
+      }
+    },
+    "owner": "bupbalabup"
+  }
+}

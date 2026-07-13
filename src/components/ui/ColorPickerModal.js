@@ -127,7 +127,7 @@ export default function ColorPickerModal({
       if (normalized) {
         applyColor(normalized);
       } else {
-        setHexError('Mã màu HEX phải có dạng #RRGGBB.');
+        setHexError('Mã màu phải có dạng #RRGGBB.');
       }
     } else {
       setHexError('');
@@ -137,7 +137,7 @@ export default function ColorPickerModal({
   function handleDone() {
     const normalized = normalizeHexColor(hexInput);
     if (!normalized) {
-      setHexError('Mã màu HEX phải có dạng #RRGGBB.');
+      setHexError('Mã màu phải có dạng #RRGGBB.');
       return;
     }
 
@@ -187,15 +187,15 @@ export default function ColorPickerModal({
     >
       <View style={styles.scrim}>
         <View style={styles.sheet}>
-          <Text style={styles.title}>Chọn màu marker trên bản đồ</Text>
+          <Text style={styles.title}>Chọn màu trên bản đồ</Text>
           <Text style={styles.description}>
-            Màu này chỉ áp dụng cho phần nền chính của marker thiết bị trên bản đồ trực tiếp.
+            Màu này chỉ áp dụng cho thiết bị trên bản đồ trực tiếp.
           </Text>
 
           <View style={styles.previewRow}>
             <View
               accessible
-              accessibilityLabel={`Màu marker hiện tại: ${lastValidColorRef.current}`}
+              accessibilityLabel={`Màu hiện tại: ${lastValidColorRef.current}`}
               style={[styles.preview, { backgroundColor: latestColor }]}
             />
             <Text style={styles.previewText}>{latestColor}</Text>
@@ -203,7 +203,7 @@ export default function ColorPickerModal({
 
           <View
             {...saturationResponder.panHandlers}
-            accessibilityLabel="Vùng chọn độ bão hòa và độ sáng của màu marker"
+            accessibilityLabel="Vùng chọn độ bão hòa và độ sáng của màu"
             accessible
             onLayout={(event) => setSvSize(event.nativeEvent.layout)}
             style={styles.saturationGrid}
@@ -229,10 +229,10 @@ export default function ColorPickerModal({
             />
           </View>
 
-          <Text style={styles.fieldLabel}>Hue</Text>
+          <Text style={styles.fieldLabel}>Dải màu</Text>
           <View
             {...hueResponder.panHandlers}
-            accessibilityLabel="Thanh chọn Hue của màu marker"
+            accessibilityLabel="Thanh chọn dải màu"
             accessible
             onLayout={(event) => setHueWidth(event.nativeEvent.layout.width)}
             style={styles.hueBar}
@@ -249,9 +249,9 @@ export default function ColorPickerModal({
             />
           </View>
 
-          <Text style={styles.fieldLabel}>Mã HEX</Text>
+          <Text style={styles.fieldLabel}>Mã màu</Text>
           <TextInput
-            accessibilityLabel="Nhập mã màu HEX cho marker"
+            accessibilityLabel="Nhập mã màu"
             autoCapitalize="characters"
             autoCorrect={false}
             maxLength={7}

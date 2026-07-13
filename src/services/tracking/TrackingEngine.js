@@ -1,4 +1,5 @@
 import { GpsEngine } from '../location';
+import { registerBackgroundLocationProcessor } from '../location/locationTaskService';
 import { updateLiveLocation } from '../firebase/liveLocationService';
 import {
   DEFAULT_GPS_INTERVAL_MS,
@@ -37,6 +38,11 @@ import {
   resetLiveTrackingNotificationCache,
   updateLiveTrackingForegroundNotification,
 } from './liveTrackingNotificationService';
+import {
+  clearTrackingTaskState,
+  loadTrackingTaskState,
+  saveTrackingTaskState,
+} from './trackingTaskStateService';
 
 const METERS_PER_KILOMETER = 1000;
 const CONNECTION_STATUS = {
@@ -81,6 +87,80 @@ let unsubscribeFromGps = null;
 let gpsLostTimer = null;
 let stoppedDurationTimer = null;
 let isDisablingTracking = false;
+let backgroundLocationQueue = Promise.resolve();
+
+function buildTaskStateSnapshot() {
+  return {
+    activeTrip: state.activeTrip,
+    activeTripId: state.activeTripId,
+    activeTripMaxSpeedKmh: state.activeTripMaxSpeedKmh,
+    connectionStatus: state.connectionStatus,
+    currentSpeedKmh: state.currentSpeedKmh,
+    deviceId: state.deviceId,
+    isEnabled: state.isEnabled,
+    isInitialized: state.isInitialized,
+    lastGpsAt: state.lastGpsAt,
+    lastGpsPoint: state.lastGpsPoint,
+    lastMeaningfulGpsPoint: state.lastMeaningfulGpsPoint,
+    lastMeaningfulMovementAt: state.lastMeaningfulMovementAt,
+    lastParkingLocation: state.lastParkingLocation,
+    movementStatus: state.movementStatus,
+    notificationDeviceName: notificationPresentation.deviceName,
+    notificationIsNetworkOnline: notificationPresentation.isNetworkOnline,
+    parkingCandidateStartedAt: state.parkingCandidateStartedAt,
+    pendingSpikePoints: state.pendingSpikePoints,
+    startedAt: state.startedAt,
+    stoppedDurationMs: state.stoppedDurationMs,
+    stoppedSince: state.stoppedSince,
+    todayDateKey: state.todayDateKey,
+    todayDistanceKm: state.todayDistanceKm,
+    uid: state.uid,
+  };
+}
+
+function persistTaskState() {
+  if (!state.uid || !state.deviceId) {
+    return;
+  }
+
+  saveTrackingTaskState(buildTaskStateSnapshot());
+}
+
+async function restoreTaskStateIfNeeded() {
+  if (state.isInitialized && state.isEnabled && state.uid && state.deviceId) {
+    return true;
+  }
+
+  const snapshot = await loadTrackingTaskState();
+  if (!snapshot?.isEnabled || !snapshot.uid || !snapshot.deviceId) {
+    if (__DEV__) {
+      console.log('[BG_PROCESSOR] no active persisted context');
+    }
+    return false;
+  }
+
+  Object.assign(state, {
+    ...snapshot,
+    isCompletingTrip: false,
+  });
+  notificationPresentation.deviceName =
+    snapshot.notificationDeviceName ?? notificationPresentation.deviceName;
+  notificationPresentation.isNetworkOnline =
+    typeof snapshot.notificationIsNetworkOnline === 'boolean'
+      ? snapshot.notificationIsNetworkOnline
+      : notificationPresentation.isNetworkOnline;
+
+  if (__DEV__) {
+    console.log('[BG_PROCESSOR] restored persisted context', {
+      activeTripId: state.activeTripId,
+      deviceId: state.deviceId,
+      lastGpsAt: state.lastGpsAt,
+      uid: state.uid ? 'present' : 'missing',
+    });
+  }
+
+  return true;
+}
 
 function logLifecycle(action, reason) {
   console.log(`[TrackingEngine] ${action} reason: ${reason}`);
@@ -198,6 +278,7 @@ function setState(nextState) {
   logStatusChanges(previousState, nextState);
   notifyState();
   refreshForegroundNotification();
+  persistTaskState();
 }
 
 function calculateStoppedDurationMs(timestamp = Date.now()) {
@@ -536,6 +617,7 @@ export function configureTrackingNotification({
   }
 
   if (shouldRefresh) {
+    persistTaskState();
     refreshForegroundNotification({ force: true });
   }
 }
@@ -664,6 +746,9 @@ async function ensureActiveTrip(location) {
   }
 
   const trip = await createAutoTrip(location);
+  if (__DEV__) {
+    console.log('[BG_SQLITE] trip started', { tripId: trip.id });
+  }
 
   setState({
     activeTrip: trip,
@@ -688,6 +773,9 @@ async function completeActiveTrip(endTime = getParkingTripEndTime()) {
       endTime,
       maxSpeedKmh: state.activeTripMaxSpeedKmh,
     });
+    if (__DEV__) {
+      console.log('[BG_SQLITE] trip completed', { tripId: completingTripId });
+    }
 
     syncCompletedTrip(state.uid, state.deviceId, completedTrip).catch((error) => {
       console.warn('Failed to sync completed trip.', error);
@@ -730,9 +818,29 @@ async function handleLocationUpdate(location) {
     speedKmh: rawSpeedKmh,
   };
 
+  if (
+    state.lastGpsPoint?.timestamp &&
+    currentPoint.timestamp <= state.lastGpsPoint.timestamp
+  ) {
+    if (__DEV__) {
+      console.log('[BG_SQLITE] duplicate point skipped', {
+        incomingTimestamp: currentPoint.timestamp,
+        lastTimestamp: state.lastGpsPoint.timestamp,
+      });
+    }
+    return;
+  }
+
   const validation = validateGpsPointCandidate(currentPoint, state.lastGpsPoint);
 
   if (!validation.accepted) {
+    if (__DEV__) {
+      console.log('[BG_PROCESSOR] point rejected', {
+        reason: validation.reason,
+        timestamp: currentPoint.timestamp,
+      });
+    }
+
     if (validation.shouldLog) {
       logRejectedGpsPoint({
         accuracy: currentPoint.accuracy,
@@ -744,6 +852,12 @@ async function handleLocationUpdate(location) {
     }
 
     return;
+  }
+
+  if (__DEV__) {
+    console.log('[BG_PROCESSOR] point accepted', {
+      timestamp: currentPoint.timestamp,
+    });
   }
 
   setState({ lastGpsAt: currentPoint.timestamp });
@@ -794,6 +908,12 @@ async function handleLocationUpdate(location) {
       currentPoint,
       state.lastGpsPoint
     );
+    if (__DEV__) {
+      console.log('[BG_SQLITE] point written', {
+        timestamp: savedPoint.timestamp,
+        tripId: trip.id,
+      });
+    }
     const activeTripMaxSpeedKmh = isMoving
       ? Math.max(
           state.activeTripMaxSpeedKmh,
@@ -869,11 +989,42 @@ async function handleLocationUpdate(location) {
       nextMovementStatus,
       state.activeTripId
     );
+    if (__DEV__) {
+      console.log('[BG_SYNC] liveLocation publish attempted');
+    }
     setState({ connectionStatus: CONNECTION_STATUS.ONLINE });
   } catch (error) {
+    if (__DEV__) {
+      console.warn('[BG_SYNC] liveLocation publish failed', error);
+    }
     setState({ connectionStatus: CONNECTION_STATUS.OFFLINE });
   }
 }
+
+async function processBackgroundLocation(location) {
+  if (__DEV__) {
+    console.log('[BG_PROCESSOR] location received', {
+      timestamp: location?.timestamp ?? null,
+    });
+  }
+
+  const restored = await restoreTaskStateIfNeeded();
+  if (!restored) {
+    return;
+  }
+
+  await handleLocationUpdate(location);
+}
+
+function enqueueBackgroundLocation(location) {
+  backgroundLocationQueue = backgroundLocationQueue
+    .catch(() => null)
+    .then(() => processBackgroundLocation(location));
+
+  return backgroundLocationQueue;
+}
+
+registerBackgroundLocationProcessor(enqueueBackgroundLocation);
 
 export async function initialize({ uid, deviceId }, reason = 'context ready') {
   console.log(
@@ -886,6 +1037,7 @@ export async function initialize({ uid, deviceId }, reason = 'context ready') {
     }
 
     stopStoppedDurationTimer();
+    await clearTrackingTaskState();
     setState({
       uid: uid ?? null,
       deviceId: deviceId ?? null,
@@ -975,6 +1127,7 @@ export async function enableTracking(reason = 'auto tracking enabled') {
     stoppedDurationMs: 0,
     stoppedSince: null,
   });
+  persistTaskState();
 
   unsubscribeFromGps = GpsEngine.subscribe((location) => {
     handleLocationUpdate(location).catch(() => {
@@ -1013,6 +1166,7 @@ export async function enableTracking(reason = 'auto tracking enabled') {
       stoppedDurationMs: 0,
       stoppedSince: null,
     });
+    await clearTrackingTaskState();
     throw error;
   }
 
@@ -1062,6 +1216,7 @@ export async function disableTracking(reason = 'explicit user action') {
       pendingSpikePoints: [],
       isCompletingTrip: false,
     });
+    await clearTrackingTaskState();
 
     return getState();
   } finally {

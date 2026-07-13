@@ -77,7 +77,7 @@ flowchart LR
   AppNavigator --> MyDevices
   AppNavigator --> NotificationPreferences
   AppNavigator --> SyncStatus
-  AppNavigator --> SecurityLog
+  AppNavigator --> ActivityLog
 ```
 
 Luồng chính:
@@ -348,13 +348,14 @@ Giới hạn hiện tại:
 - Không phải push notification.
 - iOS không có notification cố định tương đương Android foreground service.
 - Tap notification chủ yếu mở app theo hành vi nền tảng; điều hướng trực tiếp đến Live Tracking chưa được triển khai.
-- Expo Go không đủ để xác nhận foreground-service notification.
+- Expo Go không đủ để xác nhận foreground-service notification; Android runtime evidence phải đến từ Development Build hoặc APK.
 
 ## 12. Offline
 
 Chiến lược offline:
 
 - Tracking local vẫn ghi SQLite nếu GPS hoạt động.
+- Android runtime đã xác nhận tracking nền/khóa màn hình vẫn ghi SQLite khi offline.
 - Firestore lỗi không làm mất chuyến.
 - Dashboard và Live Tracking dùng cache live snapshot gần nhất.
 - Fleet Map không render MapView khi offline để tránh lỗi bản đồ.
@@ -430,8 +431,8 @@ DeviceContext quản lý:
 - Danh sách thiết bị.
 - Thiết bị được chọn.
 - Đổi tên.
-- Màu marker thiết bị trên bản đồ trực tiếp.
-- Soft delete thiết bị.
+- Đổi màu trên bản đồ cho thiết bị trên bản đồ trực tiếp.
+- Xóa thiết bị qua flow chọn thiết bị riêng và xác thực lại mật khẩu.
 
 Không tự động đổi tên thiết bị từ xa.
 
@@ -439,15 +440,17 @@ Không tự động đổi tên thiết bị từ xa.
 
 Các màn hình tài khoản đang có:
 
-- Hồ sơ tài khoản.
-- Đổi mật khẩu.
-- Thiết bị đang đăng nhập.
-- Quản lý thiết bị của tôi.
+- Account Center cho tài khoản và thiết bị.
+- Đổi mật khẩu ở màn riêng.
+- Thiết bị đang đăng nhập ở chế độ chỉ đọc.
+- Đăng xuất một thiết bị qua flow chọn phiên riêng.
+- Quản lý thiết bị của tôi chỉ để đổi tên và đổi màu trên bản đồ.
+- Xóa thiết bị qua flow chọn thiết bị riêng.
 - Tuỳ chọn thông báo.
 - Trạng thái đồng bộ.
 - Nhật ký bảo mật.
 
-Các thao tác nguy hiểm như đổi mật khẩu, kick thiết bị hoặc đăng xuất tất cả yêu cầu nhập lại mật khẩu. Do chưa có backend Admin SDK, các thao tác phiên thiết bị hiện là cơ chế app-level qua Firestore, không phải thu hồi Firebase refresh token toàn cục.
+Các thao tác nguy hiểm như đổi mật khẩu, đăng xuất một thiết bị, xóa thiết bị hoặc đăng xuất tất cả yêu cầu nhập lại mật khẩu. Do chưa có backend Admin SDK, các thao tác phiên thiết bị hiện là cơ chế app-level qua Firestore, không phải thu hồi Firebase refresh token toàn cục.
 
 ## 17. UI
 
@@ -484,21 +487,37 @@ Các điểm tối ưu hiện có:
 
 ## 19. Giới Hạn Hiện Tại
 
-- Tracking nền bền vững mới ở mức một phần.
+- Android background tracking, offline SQLite recording, reconnect sync và foreground notification update đã được runtime-verified trên thiết bị Android thật.
+- iOS background tracking chưa được runtime acceptance trong iOS Development Build.
+- Force-stop dừng background execution cho đến khi app mở lại; swipe-away có thể khác nhau theo Android OEM.
 - Chưa có backend Admin SDK để thu hồi token thật sự.
 - Chưa có Cloud Functions.
 - Auto Start không thể xác minh tự động trên mọi Android vendor.
 - Kiểm tra tối ưu pin cần native build và thiết bị thật.
-- Google Maps key hiện còn nằm trong `app.json`.
+- Google Maps Android key được inject lúc build bằng `app.config.js` từ biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`; key thật không được commit.
 - Chưa có bộ screenshot runtime chính thức.
-- Một số phần native chưa được runtime acceptance trong môi trường hiện tại.
+- Chưa có iOS background runtime acceptance.
+- Long-running Android soak test trên nhiều OEM vẫn cần thực hiện.
+
+### Runtime Acceptance Checklist
+
+- Không có duplicate GPS points khi chuyển foreground/background.
+- Không có duplicate active trips khi TaskManager và foreground runtime cùng tồn tại.
+- Không có duplicate cloud trip summaries hoặc GPS chunks sau reconnect.
+- Foreground/background transition giữ đúng active trip.
+- Lock-screen tracking tiếp tục ghi SQLite và cập nhật foreground notification.
+- Offline restart/recording tiếp tục lưu local GPS nếu GPS hoạt động.
+- Reconnect sync đẩy pending local trips lên Firestore.
+- Logout cleanup dừng task, notification và persisted tracking state.
+- Tracking disable cleanup dừng task và không ghi thêm GPS point.
+- Long-running battery/memory behavior cần soak test trên nhiều Android OEM.
 
 ## 20. Roadmap
 
 Các hướng phát triển hợp lý tiếp theo:
 
-- Runtime acceptance trên Android Development Build hoặc EAS APK.
-- Durable background tracking có khả năng khôi phục context khi app ở nền.
+- Soak test Android dài hạn cho duplicate points/trips/cloud chunks, pin và bộ nhớ.
+- iOS background runtime acceptance bằng iOS Development Build.
 - Backend bảo mật cho session và thiết bị.
 - Quản lý secret production.
 - Geofence.
@@ -566,4 +585,4 @@ File quan trọng:
 
 ## 22. Kết Luận
 
-Track Device hiện là một ứng dụng GPS tracking local-first có nhiều thành phần thực tế: auth, thiết bị, tracking, SQLite, Firestore, Fleet Map, History, Playback, cache offline, permission setup và account/security UI. Phần cốt lõi đã có trong source code, nhưng một số năng lực native và bảo mật backend vẫn cần kiểm thử hoặc phát triển thêm trước khi coi là hoàn chỉnh cho production.
+Track Device hiện là một ứng dụng GPS tracking local-first có nhiều thành phần thực tế: auth, thiết bị, tracking, SQLite, Firestore, Fleet Map, History, Playback, cache offline, permission setup và account/security UI. Android runtime đã xác nhận tracking nền, lock-screen tracking, offline recording, reconnect sync và foreground notification update. Các phần còn cần phát triển hoặc kiểm thử thêm trước production gồm iOS background acceptance, long-running Android soak test trên nhiều OEM và backend bảo mật.

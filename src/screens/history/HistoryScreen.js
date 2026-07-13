@@ -20,6 +20,7 @@ import {
 } from '../../constants/history';
 import { EmptyStateIllustration } from '../../components/branding';
 import { TrackIcon } from '../../components/icons';
+import { AppHeader } from '../../components/ui';
 import { MainRoutes } from '../../constants/routes';
 import { useAuth, useConnectivity, useDevice } from '../../contexts';
 import {
@@ -563,9 +564,6 @@ export default function HistoryScreen() {
   function renderHeader() {
     return (
       <View>
-        <Text style={styles.screenTitle}>Lịch sử hành trình</Text>
-        <Text style={styles.screenSubtitle}>{sourceLabel}</Text>
-
         <Text style={styles.sectionLabel}>THIẾT BỊ LỊCH SỬ</Text>
         <ScrollView
           horizontal
@@ -658,6 +656,10 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
+      <AppHeader
+        title="Lịch sử hành trình"
+        subtitle="Lịch sử đồng bộ từ đám mây"
+      />
       <FlatList
         data={sortedTrips}
         keyExtractor={(trip) => trip.id}
@@ -841,15 +843,6 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  screenSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  screenTitle: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
   sectionLabel: {
     ...typography.label,

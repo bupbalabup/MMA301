@@ -4,7 +4,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
   ColorPickerModal,
-  DangerButton,
   PrimaryButton,
   SecondaryButton,
   SurfaceCard,
@@ -13,7 +12,6 @@ import { useAuth, useDevice } from '../../contexts';
 import {
   logSecurityEvent,
   SECURITY_ACTIONS,
-  softDeleteDevice,
   updateDevicePreferences,
 } from '../../services/firebase/accountSecurityService';
 import { colors, radius, spacing, typography } from '../../theme';
@@ -43,7 +41,6 @@ export default function MyDevicesScreen() {
   } = useDevice();
   const [drafts, setDrafts] = useState({});
   const [savingDeviceId, setSavingDeviceId] = useState(null);
-  const [deletingDeviceId, setDeletingDeviceId] = useState(null);
   const [colorPickerDeviceId, setColorPickerDeviceId] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -85,7 +82,7 @@ export default function MyDevicesScreen() {
     }
 
     if (!normalizedMarkerColor) {
-      setError('Mã màu marker không hợp lệ.');
+      setError('Mã màu không hợp lệ.');
       return;
     }
 
@@ -138,35 +135,6 @@ export default function MyDevicesScreen() {
     }
   }
 
-  async function deleteDevice(device) {
-    if (device.deviceId === localDeviceId) {
-      setError('Không thể xóa thiết bị hiện tại trong màn hình này.');
-      return;
-    }
-
-    setDeletingDeviceId(device.deviceId);
-    setError('');
-    setMessage('');
-
-    try {
-      await softDeleteDevice(user.uid, device.deviceId);
-      await logSecurityEvent(user.uid, {
-        action: SECURITY_ACTIONS.DELETE_DEVICE,
-        deviceId: localDeviceId,
-        deviceName: localDeviceName,
-        platform: selectedDevice?.platform,
-        targetDeviceId: device.deviceId,
-        targetDeviceName: getDeviceDisplayName(device),
-      });
-      await refreshDevices();
-      setMessage('Đã xóa thiết bị khỏi tài khoản.');
-    } catch (deleteError) {
-      setError(deleteError.message ?? 'Không thể xóa thiết bị.');
-    } finally {
-      setDeletingDeviceId(null);
-    }
-  }
-
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView
@@ -176,10 +144,19 @@ export default function MyDevicesScreen() {
       >
         <Text style={styles.title}>Thiết bị của tôi</Text>
         <Text style={styles.description}>
-          Đổi tên và màu marker trên bản đồ cho từng thiết bị trong tài khoản.
+          Đổi tên và màu hiển thị trên bản đồ.
         </Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {visibleDevices.length === 0 ? (
+          <SurfaceCard style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Chưa có thiết bị</Text>
+            <Text style={styles.emptyText}>
+              Thiết bị đăng nhập vào tài khoản sẽ xuất hiện tại đây.
+            </Text>
+          </SurfaceCard>
+        ) : null}
 
         {visibleDevices.map((device) => {
           const draft = drafts[device.deviceId] ?? createDraft(device);
@@ -194,6 +171,7 @@ export default function MyDevicesScreen() {
                 {isCurrentDevice ? ' - Thiết bị hiện tại' : ''}
               </Text>
 
+              <Text style={styles.cardSectionTitle}>THÔNG TIN CHUNG</Text>
               <Text style={styles.inputLabel}>Tên thiết bị</Text>
               <TextInput
                 onChangeText={(name) => updateDraft(device.deviceId, { name })}
@@ -201,10 +179,11 @@ export default function MyDevicesScreen() {
                 value={draft.name}
               />
 
-              <Text style={styles.inputLabel}>Màu marker trên bản đồ</Text>
+              <Text style={styles.cardSectionTitle}>ĐỔI MÀU TRÊN BẢN ĐỒ</Text>
+              <Text style={styles.inputLabel}>Đổi màu trên bản đồ</Text>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Mở bảng màu marker cho ${getDeviceDisplayName(device)}`}
+                accessibilityLabel={`Mở bảng màu cho ${getDeviceDisplayName(device)}`}
                 hitSlop={4}
                 onPress={() => setColorPickerDeviceId(device.deviceId)}
                 style={({ pressed }) => [
@@ -215,15 +194,15 @@ export default function MyDevicesScreen() {
                 <View
                   style={[
                     styles.colorPreview,
-                    { backgroundColor: safeMarkerColor },
+                  { backgroundColor: safeMarkerColor },
                   ]}
                 />
                 <View style={styles.colorTextWrap}>
-                  <Text style={styles.colorLabel}>Màu marker hiện tại</Text>
+                  <Text style={styles.colorLabel}>Màu hiện tại</Text>
                   <Text style={styles.colorValue}>{safeMarkerColor}</Text>
                 </View>
                 <SecondaryButton
-                  label="Mở bảng màu"
+                  label="Đổi màu"
                   onPress={() => setColorPickerDeviceId(device.deviceId)}
                   style={styles.colorButton}
                 />
@@ -235,14 +214,6 @@ export default function MyDevicesScreen() {
                 onPress={() => saveDevice(device)}
                 style={styles.button}
               />
-              {!isCurrentDevice ? (
-                <DangerButton
-                  label={deletingDeviceId === device.deviceId ? 'Đang xóa...' : 'Xóa thiết bị khỏi tài khoản'}
-                  loading={deletingDeviceId === device.deviceId}
-                  onPress={() => deleteDevice(device)}
-                  style={styles.button}
-                />
-              ) : null}
 
               <ColorPickerModal
                 initialColor={safeMarkerColor}
@@ -267,6 +238,11 @@ const styles = StyleSheet.create({
   },
   card: {
     marginTop: spacing.md,
+  },
+  cardSectionTitle: {
+    ...typography.label,
+    color: colors.textMuted,
+    marginTop: spacing.lg,
   },
   colorButton: {
     minWidth: 118,
@@ -312,6 +288,19 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   deviceTitle: {
+    ...typography.cardTitle,
+    color: colors.textPrimary,
+  },
+  emptyCard: {
+    marginTop: spacing.lg,
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    lineHeight: 21,
+    marginTop: spacing.xs,
+  },
+  emptyTitle: {
     ...typography.cardTitle,
     color: colors.textPrimary,
   },

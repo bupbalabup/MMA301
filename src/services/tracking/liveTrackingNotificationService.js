@@ -102,6 +102,13 @@ export async function updateLiveTrackingForegroundNotification({
     return false;
   }
 
+  if (__DEV__) {
+    console.log('[BG_NOTIFICATION] visible key changed', {
+      body: content.body,
+      title: content.title,
+    });
+  }
+
   const updated = await updateAndroidForegroundServiceNotification(
     lastLocationOptions ?? {},
     buildForegroundServiceOptions(content)
@@ -109,6 +116,8 @@ export async function updateLiveTrackingForegroundNotification({
 
   if (updated) {
     lastVisibleKey = content.key;
+  } else if (__DEV__) {
+    console.warn('[BG_NOTIFICATION] foreground notification update was not applied');
   }
 
   return updated;

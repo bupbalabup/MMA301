@@ -17,7 +17,7 @@ Track Device tập trung vào các nhu cầu chính:
 - Đồng bộ hành trình đã hoàn thành lên Firestore để xem từ thiết bị khác.
 - Phát lại hành trình bằng bản đồ.
 
-Ứng dụng ưu tiên Android, đồng thời có cấu hình và một số luồng giao diện cho iOS. Một số hành vi native như foreground service, thông báo theo dõi và quyền chạy nền cần kiểm thử bằng Android Development Build hoặc EAS APK, không thể xác nhận đầy đủ chỉ bằng Expo Go.
+Ứng dụng ưu tiên Android, đồng thời có cấu hình và một số luồng giao diện cho iOS. Android Development Build/APK đã xác nhận foreground service, thông báo theo dõi và tracking nền; Expo Go không phải môi trường acceptance cho các hành vi native này. iOS background tracking cần kiểm thử riêng bằng iOS Development Build.
 
 ## Tính Năng
 
@@ -53,9 +53,10 @@ Track Device tập trung vào các nhu cầu chính:
 - ConnectivityContext với trạng thái online, offline và checking.
 - Permission Wizard cho Android và iOS.
 - Thông báo foreground service cho tracking trên Android native build.
-- Hồ sơ tài khoản.
-- Thiết bị đang đăng nhập.
-- Quản lý thiết bị của tôi.
+- Android runtime đã xác nhận tracking tiếp tục khi app ở nền/khóa màn hình, offline vẫn ghi SQLite, notification foreground cập nhật và chuyến pending đồng bộ lại sau khi có mạng.
+- Account Center cho bảo mật, phiên đăng nhập và thiết bị.
+- Thiết bị đang đăng nhập ở chế độ chỉ đọc.
+- Quản lý thiết bị của tôi chỉ để đổi tên và đổi màu trên bản đồ.
 - Đổi màu marker thiết bị trên bản đồ trực tiếp bằng bảng chọn màu và mã HEX.
 - Tuỳ chọn thông báo trong ứng dụng.
 - Màn hình trạng thái đồng bộ.
@@ -64,7 +65,7 @@ Track Device tập trung vào các nhu cầu chính:
 
 ### Đang Hoàn Thiện
 
-- Theo dõi nền bền vững bằng TaskManager mới ở mức một phần. TaskManager đã được cấu hình, nhưng pipeline hiện tại vẫn phụ thuộc vào listener trong bộ nhớ khi xử lý vị trí nền.
+- iOS background tracking chờ runtime acceptance riêng trong iOS Development Build; không được suy ra từ kết quả Android.
 - Kick thiết bị và đăng xuất tất cả thiết bị đang ở mức client-mediated qua Firestore. Dự án chưa có backend Admin SDK để thu hồi Firebase refresh token toàn cục.
 - Auto Start trên Android không có API kiểm tra chung cho mọi hãng. Ứng dụng chỉ mở cài đặt phù hợp nhất và cho phép người dùng xác nhận thủ công.
 - Kiểm tra tối ưu pin phụ thuộc native build và cần xác nhận trên thiết bị thật.
@@ -84,7 +85,7 @@ Track Device tập trung vào các nhu cầu chính:
 - Backend Admin SDK.
 - Cloud Functions.
 - Push notification backend.
-- Khôi phục tracking nền hoàn toàn khi React runtime không còn hoạt động.
+- iOS background runtime acceptance.
 
 ## Công Nghệ
 
@@ -221,9 +222,10 @@ EXPO_PUBLIC_FIREBASE_PROJECT_ID=
 EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 EXPO_PUBLIC_FIREBASE_APP_ID=
+GOOGLE_MAPS_ANDROID_API_KEY=
 ```
 
-Lưu ý: cấu hình Google Maps Android hiện vẫn nằm trong `app.json`. Trước khi public repository hoặc phát hành production, nên chuyển key này sang cấu hình build an toàn hơn.
+Google Maps Android key được inject lúc Expo resolve cấu hình build qua `app.config.js` từ biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`. Không commit key thật vào repository. Khi phát hành Android, nên giới hạn API key theo Android package `com.danghieu.trackcam` và SHA-1 certificate; bản phát hành Google Play có thể cần thêm SHA-1 của Play App Signing.
 
 ## Quyền Android
 
@@ -285,14 +287,32 @@ Cho phép thử lại thủ công hoặc tự thử lại sau khi có mạng
 
 SQLite là nguồn dữ liệu chính cho lịch sử và playback của thiết bị hiện tại. AsyncStorage lưu cache danh sách thiết bị và snapshot live-location gần nhất để giao diện vẫn có dữ liệu khi mất mạng. Khi Firestore lỗi, tracking local không bị dừng. Khi có mạng lại, các chuyến hoàn thành có thể được đồng bộ.
 
+## Runtime Acceptance Checklist
+
+Android runtime đã được xác nhận cho các luồng chính: tracking chạy nền, khóa màn hình, offline SQLite recording, foreground notification update và reconnect sync lên Firestore. Checklist hồi quy cần giữ lại cho mỗi bản build:
+
+- Không tạo duplicate GPS points khi chuyển foreground/background.
+- Không tạo duplicate active trips khi TaskManager và foreground runtime cùng hoạt động.
+- Không tạo duplicate cloud trip summaries hoặc GPS chunks sau reconnect.
+- Chuyển foreground/background không làm mất active trip.
+- Lock-screen tracking tiếp tục cập nhật SQLite và notification.
+- Offline tracking vẫn ghi local trips/gps_points.
+- Reconnect sync đưa pending local trips lên Firestore.
+- Logout dừng task, dừng notification và không để orphan tracking state.
+- Disable tracking dừng task, dọn persisted task state và không ghi thêm point.
+- Long-running battery/memory behavior cần soak test trên nhiều thiết bị Android/OEM.
+- Force-stop dừng background execution cho đến khi người dùng mở lại app.
+- Swipe-away behavior có thể khác nhau theo Android vendor.
+- iOS background tracking chỉ được công bố sau khi kiểm thử bằng iOS Development Build.
+
 ## Roadmap
 
 Các hướng phát triển tiếp theo bắt đầu từ trạng thái source code hiện tại:
 
-- Kiểm thử runtime đầy đủ trên Android Development Build hoặc EAS APK.
-- Hoàn thiện tracking nền bền vững, có khả năng khôi phục auth, thiết bị và active trip trong TaskManager.
+- Kiểm thử dài hạn trên nhiều thiết bị Android để đánh giá pin, bộ nhớ và hành vi OEM khi swipe-away.
+- Kiểm thử iOS background tracking bằng iOS Development Build trước khi công bố hỗ trợ iOS nền.
 - Bổ sung backend bảo mật để thu hồi session thật sự.
-- Quản lý Google Maps API key bằng cấu hình build an toàn.
+- Kiểm tra định kỳ giới hạn Google Maps API key theo package và SHA-1 production.
 - Geofence.
 - Cảnh báo tốc độ.
 - Thống kê đội thiết bị.

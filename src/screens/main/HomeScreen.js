@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BrandMark, EmptyStateIllustration } from '../../components/branding';
+import { EmptyStateIllustration } from '../../components/branding';
 import { TrackIcon } from '../../components/icons';
 import { DeviceMapMarker, MapErrorBoundary } from '../../components/map';
 import { AppHeader, StatusBadge } from '../../components/ui';
@@ -204,14 +204,6 @@ export default function HomeScreen({ navigation }) {
           mode="transparent"
           title="Track Device"
           subtitle={user?.email ?? ''}
-          rightSlot={(
-            <View style={styles.localChip}>
-              <View style={styles.localChipDot} />
-              <Text style={styles.localChipText} numberOfLines={2}>
-                {localDeviceName || 'Thiáº¿t bá»‹ nÃ y'}
-              </Text>
-            </View>
-          )}
         />
         <HeroCard
           deviceName={selectedDeviceName}
@@ -221,19 +213,6 @@ export default function HomeScreen({ navigation }) {
           speedKmh={displaySpeedKmh}
           status={displayStatus}
         />
-        <View style={styles.appHeader}>
-          <BrandMark size={48} style={styles.headerBrand} />
-          <View style={styles.headerText}>
-            <Text style={styles.appName}>Track Device</Text>
-            <Text style={styles.appEmail} numberOfLines={2}>{user?.email ?? ''}</Text>
-          </View>
-          <View style={styles.localChip}>
-            <View style={styles.localChipDot} />
-            <Text style={styles.localChipText} numberOfLines={2}>
-              {localDeviceName || 'Thiết bị này'}
-            </Text>
-          </View>
-        </View>
 
         <Text style={styles.sectionLabel}>TỔNG QUAN THIẾT BỊ</Text>
         <View style={styles.metricsGrid}>
@@ -329,15 +308,6 @@ export default function HomeScreen({ navigation }) {
           )}
         </View>
 
-        <HeroCard
-          deviceName={selectedDeviceName}
-          isLocal={isViewingLocalDevice}
-          connectionStatus={displayConnectionStatus}
-          onPress={() => navigation.getParent()?.navigate(MainRoutes.LiveTracking)}
-          speedKmh={displaySpeedKmh}
-          status={displayStatus}
-        />
-
         <Text style={styles.sectionLabel}>THÔNG SỐ</Text>
         <View style={styles.metricsGrid}>
           <QuickMetric icon="maxSpeed" label="Tốc độ max" value={formatSpeed(displayMaxSpeedKmh, { emptyForInvalid: true })} />
@@ -370,9 +340,6 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  appEmail: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-  appHeader: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
-  appName: { ...typography.screenTitle, color: colors.textPrimary },
   cardTitle: { ...typography.cardTitle, color: colors.textPrimary, marginBottom: spacing.sm },
   content: { padding: spacing.lg },
   deviceChip: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.medium, borderWidth: 1, marginRight: spacing.sm, minWidth: 130, maxWidth: 210, padding: spacing.sm + 2 },
@@ -383,21 +350,16 @@ const styles = StyleSheet.create({
   deviceChipSelectedText: { color: colors.surface },
   deviceChips: { paddingBottom: spacing.xs, paddingTop: spacing.xs },
   deviceSelectorWrap: { marginBottom: spacing.md, minHeight: 52 },
-  headerText: { flex: 1, marginRight: spacing.sm },
-  headerBrand: { marginRight: spacing.sm },
-  heroCard: { backgroundColor: colors.textPrimary, borderRadius: radius.large, marginBottom: spacing.sm, padding: spacing.xl },
+  heroCard: { backgroundColor: colors.textPrimary, borderRadius: radius.large, marginBottom: spacing.md, padding: spacing.lg },
   heroDeviceName: { ...typography.cardTitle, color: colors.surface, flex: 1, marginRight: spacing.sm },
   heroDeviceRow: { alignItems: 'center', flex: 1, flexDirection: 'row', flexWrap: 'wrap', marginRight: spacing.sm },
   heroDetailAction: { ...typography.button, color: colors.primarySoft, marginTop: spacing.md },
   heroSpeedLabel: { ...typography.label, color: colors.textMuted, marginTop: spacing.xs },
-  heroSpeedValue: { color: colors.surface, fontSize: 48, fontWeight: '900', letterSpacing: 0, marginTop: spacing.lg },
+  heroSpeedValue: { color: colors.surface, fontSize: 44, fontWeight: '900', letterSpacing: 0, marginTop: spacing.md },
   heroStatusRow: { marginTop: spacing.md },
   heroTop: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   localBadge: { backgroundColor: colors.onlineSoft },
   localBadgeText: { color: colors.online },
-  localChip: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.medium, borderWidth: 1, flexDirection: 'row', maxWidth: '45%', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  localChipDot: { backgroundColor: colors.moving, borderRadius: radius.pill, height: 6, marginRight: spacing.xs, width: 6 },
-  localChipText: { ...typography.caption, color: colors.textSecondary, flexShrink: 1, fontWeight: '600' },
   mapState: { alignItems: 'center', justifyContent: 'center', minHeight: 170, padding: spacing.lg },
   mapStateText: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
   mapStateTitle: { ...typography.cardTitle, color: colors.textPrimary, textAlign: 'center' },

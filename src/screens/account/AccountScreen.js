@@ -1,120 +1,64 @@
-import { useEffect, useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
+import { useState } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PrimaryButton, SurfaceCard } from '../../components/ui';
+import PasswordConfirmModal from '../../components/security/PasswordConfirmModal';
+import {
+  SettingsListItem,
+  SurfaceCard,
+} from '../../components/ui';
+import { MainRoutes } from '../../constants/routes';
 import { useAuth, useDevice } from '../../contexts';
 import {
   logSecurityEvent,
+  revokeAllDeviceSessions,
   SECURITY_ACTIONS,
-  updateUserAccountProfile,
 } from '../../services/firebase/accountSecurityService';
-import { updateCurrentUserDisplayName } from '../../services/firebase/authService';
-import { colors, radius, spacing, typography } from '../../theme';
-import { formatDateTime } from '../../utils/format';
-import { getPlatformLabel } from './accountHelpers';
+import { colors, spacing, typography } from '../../theme';
 
-function Field({ editable = true, label, onChangeText, secureTextEntry, value }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        editable={editable}
-        onChangeText={onChangeText}
-        secureTextEntry={secureTextEntry}
-        style={[styles.input, !editable && styles.inputDisabled]}
-        value={value}
-      />
-    </View>
-  );
-}
-
-export default function AccountScreen() {
+export default function AccountScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { changePassword, user } = useAuth();
+  const { confirmPassword, logout, user } = useAuth();
   const { localDeviceId, localDeviceName, selectedDevice } = useDevice();
-  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [savingName, setSavingName] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [confirmAllVisible, setConfirmAllVisible] = useState(false);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
 
-  useEffect(() => {
-    setDisplayName(user?.displayName ?? '');
-  }, [user?.displayName]);
-
-  const createdAt = user?.metadata?.creationTime
-    ? formatDateTime(Date.parse(user.metadata.creationTime))
-    : 'Chưa có dữ liệu';
-  const lastLoginAt = user?.metadata?.lastSignInTime
-    ? formatDateTime(Date.parse(user.metadata.lastSignInTime))
-    : 'Chưa có dữ liệu';
-
-  async function saveDisplayName() {
+  async function confirmLogoutAll(password) {
     if (!user?.uid) return;
 
-    setSavingName(true);
-    setMessage('');
-    setError('');
+    setConfirmLoading(true);
+    setConfirmError('');
+
     try {
-      const trimmedDisplayName = displayName.trim();
-      await updateCurrentUserDisplayName(trimmedDisplayName || null);
-      await updateUserAccountProfile(user.uid, {
-        displayName: trimmedDisplayName || null,
-      });
-      setMessage('Đã lưu tên hiển thị.');
-    } catch (saveError) {
-      setError(saveError.message ?? 'Không thể lưu tên hiển thị.');
-    } finally {
-      setSavingName(false);
-    }
-  }
+      await confirmPassword(password);
+      setConfirmLoading(false);
+      setConfirmAllVisible(false);
 
-  async function submitPasswordChange() {
-    setMessage('');
-    setError('');
-
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setError('Vui lòng nhập đầy đủ mật khẩu.');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setError('Mật khẩu mới phải có ít nhất 6 ký tự.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError('Xác nhận mật khẩu mới không trùng khớp.');
-      return;
-    }
-
-    setChangingPassword(true);
-    try {
-      await changePassword(currentPassword, newPassword);
-      await logSecurityEvent(user.uid, {
-        action: SECURITY_ACTIONS.CHANGE_PASSWORD,
-        deviceId: localDeviceId,
-        deviceName: localDeviceName,
-        platform: selectedDevice?.platform,
-      });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setMessage('Đã đổi mật khẩu thành công.');
-    } catch (changeError) {
-      setError(changeError.message ?? 'Không thể đổi mật khẩu.');
-    } finally {
-      setChangingPassword(false);
+      Alert.alert(
+        'Đăng xuất tất cả thiết bị',
+        'Thiết bị hiện tại cũng sẽ đăng xuất. Bạn có chắc muốn tiếp tục?',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Đăng xuất tất cả',
+            style: 'destructive',
+            onPress: async () => {
+              await revokeAllDeviceSessions(user.uid, 'logout_all');
+              await logSecurityEvent(user.uid, {
+                action: SECURITY_ACTIONS.LOGOUT_ALL,
+                deviceId: localDeviceId,
+                deviceName: localDeviceName,
+                platform: selectedDevice?.platform,
+              });
+              await logout();
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      setConfirmError(error.message ?? 'Không thể xác nhận mật khẩu.');
+      setConfirmLoading(false);
     }
   }
 
@@ -122,120 +66,122 @@ export default function AccountScreen() {
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.md }]}
-        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Tài khoản</Text>
+        <Text style={styles.title}>Tài khoản và thiết bị</Text>
+        <Text style={styles.description}>
+          Quản lý bảo mật, phiên đăng nhập và thiết bị theo dõi trong tài khoản.
+        </Text>
 
         <SurfaceCard style={styles.card}>
-          <Field label="Tên hiển thị" value={displayName} onChangeText={setDisplayName} />
-          <Field editable={false} label="Email" value={user?.email ?? ''} />
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Ngày tạo tài khoản</Text>
-            <Text style={styles.infoValue}>{createdAt}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Lần đăng nhập gần nhất</Text>
-            <Text style={styles.infoValue}>{lastLoginAt}</Text>
-          </View>
-          <PrimaryButton
-            disabled={savingName}
-            label={savingName ? 'Đang lưu...' : 'Lưu tên hiển thị'}
-            loading={savingName}
-            onPress={saveDisplayName}
-            style={styles.button}
+          <Text style={styles.emailLabel}>Email</Text>
+          <Text style={styles.emailValue}>{user?.email ?? 'Không xác định'}</Text>
+        </SurfaceCard>
+
+        <Section title="BẢO MẬT">
+          <SettingsListItem
+            icon="permission"
+            title="Đổi mật khẩu"
+            subtitle="Cập nhật mật khẩu đăng nhập"
+            onPress={() => navigation.navigate(MainRoutes.ChangePassword)}
           />
-        </SurfaceCard>
-
-        <SurfaceCard style={styles.card}>
-          <Text style={styles.sectionTitle}>Đổi mật khẩu</Text>
-          <Field label="Mật khẩu hiện tại" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry />
-          <Field label="Mật khẩu mới" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
-          <Field label="Xác nhận mật khẩu mới" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
-          <PrimaryButton
-            disabled={changingPassword}
-            label={changingPassword ? 'Đang đổi mật khẩu...' : 'Đổi mật khẩu'}
-            loading={changingPassword}
-            onPress={submitPasswordChange}
-            style={styles.button}
+          <SettingsListItem
+            icon="settings"
+            title="Nhật ký hoạt động"
+            subtitle="Đăng nhập, đổi mật khẩu và thao tác thiết bị"
+            onPress={() => navigation.navigate(MainRoutes.ActivityLog)}
           />
-        </SurfaceCard>
+        </Section>
 
-        {message ? <Text style={styles.message}>{message}</Text> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Section title="PHIÊN ĐĂNG NHẬP">
+          <SettingsListItem
+            icon="foregroundLocation"
+            title="Thiết bị đang đăng nhập"
+            subtitle="Xem danh sách phiên đăng nhập"
+            onPress={() => navigation.navigate(MainRoutes.SignedInDevices)}
+          />
+          <SettingsListItem
+            icon="lostConnection"
+            title="Đăng xuất một thiết bị"
+            subtitle="Chọn phiên cần đăng xuất"
+            onPress={() => navigation.navigate(MainRoutes.SelectSessionToLogout)}
+          />
+          <SettingsListItem
+            destructive
+            icon="close"
+            title="Đăng xuất tất cả thiết bị"
+            subtitle="Yêu cầu nhập mật khẩu trước khi thực hiện"
+            onPress={() => {
+              setConfirmError('');
+              setConfirmAllVisible(true);
+            }}
+          />
+        </Section>
 
-        <SurfaceCard style={styles.card}>
-          <Text style={styles.sectionTitle}>Phiên hiện tại</Text>
-          <Text style={styles.note}>Thiết bị: {localDeviceName || 'Thiết bị'}</Text>
-          <Text style={styles.note}>Nền tảng: {getPlatformLabel(selectedDevice?.platform)}</Text>
-        </SurfaceCard>
+        <Section title="THIẾT BỊ THEO DÕI">
+          <SettingsListItem
+            icon="device"
+            title="Đổi tên và màu trên bản đồ"
+            subtitle="Chỉnh tên thiết bị và màu hiển thị"
+            onPress={() => navigation.navigate(MainRoutes.MyDevices)}
+          />
+          <SettingsListItem
+            destructive
+            icon="close"
+            title="Xóa thiết bị"
+            subtitle="Chọn thiết bị cần xóa khỏi tài khoản"
+            onPress={() => navigation.navigate(MainRoutes.SelectDeviceToDelete)}
+          />
+        </Section>
       </ScrollView>
+
+      <PasswordConfirmModal
+        error={confirmError}
+        loading={confirmLoading}
+        onCancel={() => {
+          if (!confirmLoading) {
+            setConfirmAllVisible(false);
+            setConfirmError('');
+          }
+        }}
+        onConfirm={confirmLogoutAll}
+        title="Nhập mật khẩu để xác nhận."
+        visible={confirmAllVisible}
+      />
     </SafeAreaView>
   );
 }
 
+function Section({ children, title }) {
+  return (
+    <>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <SurfaceCard style={styles.card}>{children}</SurfaceCard>
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
-  button: {
-    marginTop: spacing.md,
-  },
   card: {
     marginTop: spacing.md,
   },
   content: {
     padding: spacing.lg,
   },
-  error: {
-    ...typography.caption,
-    color: colors.danger,
-    marginTop: spacing.sm,
-  },
-  field: {
-    marginBottom: spacing.md,
-  },
-  infoLabel: {
-    ...typography.caption,
+  description: {
+    ...typography.body,
     color: colors.textSecondary,
-    flex: 1,
-  },
-  infoRow: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    paddingVertical: spacing.sm,
-  },
-  infoValue: {
-    ...typography.caption,
-    color: colors.textPrimary,
-    flex: 1.2,
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  input: {
-    backgroundColor: colors.surfaceSecondary,
-    borderColor: colors.border,
-    borderRadius: radius.medium,
-    borderWidth: 1,
-    color: colors.textPrimary,
-    fontSize: 15,
+    lineHeight: 21,
     marginTop: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 3,
   },
-  inputDisabled: {
-    color: colors.textSecondary,
-    opacity: 0.8,
-  },
-  label: {
+  emailLabel: {
     ...typography.label,
     color: colors.textMuted,
   },
-  message: {
-    ...typography.caption,
-    color: colors.success,
-    marginTop: spacing.sm,
-  },
-  note: {
+  emailValue: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
+    fontWeight: '800',
     marginTop: spacing.xs,
   },
   safeArea: {
@@ -243,9 +189,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    ...typography.cardTitle,
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
+    ...typography.label,
+    color: colors.textMuted,
+    marginTop: spacing.xl,
   },
   title: {
     ...typography.screenTitle,

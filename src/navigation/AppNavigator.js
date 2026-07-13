@@ -5,8 +5,11 @@ import { MainRoutes } from '../constants/routes';
 import { colors, spacing, typography } from '../theme';
 import { TrackIcon } from '../components/icons';
 import AccountScreen from '../screens/account/AccountScreen';
+import ChangePasswordScreen from '../screens/account/ChangePasswordScreen';
 import MyDevicesScreen from '../screens/account/MyDevicesScreen';
 import NotificationPreferencesScreen from '../screens/account/NotificationPreferencesScreen';
+import SelectDeviceToDeleteScreen from '../screens/account/SelectDeviceToDeleteScreen';
+import SelectSessionToLogoutScreen from '../screens/account/SelectSessionToLogoutScreen';
 import SecurityLogScreen from '../screens/account/SecurityLogScreen';
 import SignedInDevicesScreen from '../screens/account/SignedInDevicesScreen';
 import SyncStatusScreen from '../screens/account/SyncStatusScreen';
@@ -78,7 +81,12 @@ export default function AppNavigator() {
       <Stack.Screen
         name={MainRoutes.Account}
         component={AccountScreen}
-        options={{ title: 'Tài khoản' }}
+        options={{ title: 'Tài khoản và thiết bị' }}
+      />
+      <Stack.Screen
+        name={MainRoutes.ChangePassword}
+        component={ChangePasswordScreen}
+        options={{ title: 'Đổi mật khẩu' }}
       />
       <Stack.Screen
         name={MainRoutes.SignedInDevices}
@@ -91,6 +99,16 @@ export default function AppNavigator() {
         options={{ title: 'Thiết bị của tôi' }}
       />
       <Stack.Screen
+        name={MainRoutes.SelectDeviceToDelete}
+        component={SelectDeviceToDeleteScreen}
+        options={{ title: 'Xóa thiết bị' }}
+      />
+      <Stack.Screen
+        name={MainRoutes.SelectSessionToLogout}
+        component={SelectSessionToLogoutScreen}
+        options={{ title: 'Đăng xuất thiết bị' }}
+      />
+      <Stack.Screen
         name={MainRoutes.NotificationPreferences}
         component={NotificationPreferencesScreen}
         options={{ title: 'Thông báo' }}
@@ -101,7 +119,7 @@ export default function AppNavigator() {
         options={{ title: 'Đồng bộ' }}
       />
       <Stack.Screen
-        name={MainRoutes.SecurityLog}
+        name={MainRoutes.ActivityLog}
         component={SecurityLogScreen}
         options={{ title: 'Nhật ký hoạt động' }}
       />

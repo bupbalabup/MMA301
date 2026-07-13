@@ -10,13 +10,16 @@ export const AuthRoutes = {
 
 export const MainRoutes = {
   Account: 'Account',
+  ActivityLog: 'ActivityLog',
+  ChangePassword: 'ChangePassword',
   LiveTracking: 'LiveTracking',
   MyDevices: 'MyDevices',
   NotificationPreferences: 'NotificationPreferences',
+  SelectDeviceToDelete: 'SelectDeviceToDelete',
+  SelectSessionToLogout: 'SelectSessionToLogout',
   TripDetail: 'TripDetail',
   Playback: 'Playback',
   PermissionSetup: 'PermissionSetup',
-  SecurityLog: 'SecurityLog',
   SignedInDevices: 'SignedInDevices',
   SyncStatus: 'SyncStatus',
   MainTabs: 'MainTabs',

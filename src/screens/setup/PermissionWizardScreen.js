@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import {
   Linking,
   Platform,
@@ -63,6 +63,15 @@ function StepStatus({ status }) {
       label={status.label}
       status={getStatusTone(status)}
     />
+  );
+}
+
+function LabeledStatusRow({ label, status }) {
+  return (
+    <View style={styles.statusRow}>
+      <Text style={styles.statusLabel}>{label}</Text>
+      <StepStatus status={status} />
+    </View>
   );
 }
 
@@ -238,7 +247,7 @@ export default function PermissionWizardScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         <BrandMark variant="horizontal" size={42} style={styles.brand} />
-        <Text style={styles.title}>Thiết lập theo dõi</Text>
+        {!navigation ? <Text style={styles.title}>Thiết lập theo dõi</Text> : null}
         <Text style={styles.progress}>Bước {stepIndex + 1} trong {steps.length}</Text>
 
         <View style={styles.progressTrack}>
@@ -257,9 +266,14 @@ export default function PermissionWizardScreen({ navigation }) {
               {!setupStatus?.foregroundPermission?.granted ? (
                 <EmptyStateIllustration type="permissionMissing" height={88} style={styles.permissionIllustration} />
               ) : null}
-              <StepStatus status={foregroundStatus} />
-              <StepStatus status={servicesStatus} />
-              <PrimaryButton label="Yêu cầu quyền" loading={loading} onPress={requestForeground} style={styles.action} />
+              <LabeledStatusRow label="Quyền vị trí" status={foregroundStatus} />
+              <LabeledStatusRow label="Dịch vụ vị trí" status={servicesStatus} />
+              {!setupStatus?.foregroundPermission?.granted && setupStatus?.foregroundPermission?.canAskAgain !== false ? (
+                <PrimaryButton label="Yêu cầu quyền" loading={loading} onPress={requestForeground} style={styles.action} />
+              ) : null}
+              {setupStatus?.servicesEnabled === false ? (
+                <SecondaryButton label="Bật dịch vụ vị trí" onPress={() => Linking.openSettings()} style={styles.secondaryAction} />
+              ) : null}
               {setupStatus?.foregroundPermission?.canAskAgain === false && !setupStatus?.foregroundPermission?.granted ? (
                 <SecondaryButton label="Mở Cài đặt" onPress={() => Linking.openSettings()} style={styles.secondaryAction} />
               ) : null}
@@ -371,6 +385,8 @@ const styles = StyleSheet.create({
   readyTitle: { ...typography.cardTitle, color: colors.success, marginBottom: spacing.sm },
   safeArea: { backgroundColor: colors.background, flex: 1 },
   secondaryAction: { marginTop: spacing.sm },
+  statusLabel: { ...typography.body, color: colors.textPrimary, flex: 1 },
+  statusRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, justifyContent: 'space-between', marginTop: spacing.sm },
   stepIconWrap: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.primarySoft, borderRadius: radius.large, height: 72, justifyContent: 'center', marginBottom: spacing.md, width: 72 },
   stepTitle: { ...typography.sectionTitle, color: colors.textPrimary, marginBottom: spacing.md },
   title: { ...typography.screenTitle, color: colors.textPrimary, marginTop: spacing.xs },

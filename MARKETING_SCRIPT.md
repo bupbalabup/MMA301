@@ -72,7 +72,7 @@ Nếu thiết bị bắt đầu di chuyển, app tự tạo chuyến. Nếu thi�
 
 Ứng dụng không lấy tốc độ hệ điều hành trả về làm nguồn duy nhất. Tốc độ chính được tính từ tọa độ và timestamp. Các điểm GPS bất thường được từ chối thay vì hiển thị tốc độ bị giới hạn giả.
 
-Trên Android native build, khi tracking đang chạy, app có thể hiển thị foreground-service notification cho thiết bị cục bộ. Thông báo này hiển thị tên thiết bị, tốc độ, trạng thái kết nối và trạng thái di chuyển. Đây không phải push notification và cần kiểm thử bằng Development Build hoặc APK.
+Trên Android native build, khi tracking đang chạy, app hiển thị foreground-service notification cho thiết bị cục bộ. Thông báo này hiển thị tên thiết bị, tốc độ, trạng thái kết nối và trạng thái di chuyển. Runtime trên thiết bị Android thật đã xác nhận notification vẫn cập nhật khi app ở nền; đây không phải push notification.
 
 ## 7. Demo Offline
 
@@ -80,7 +80,7 @@ Khi mất Internet, Track Device không reset dữ liệu hiển thị về 0. D
 
 Fleet Map không render Google Map khi offline để tránh crash bản đồ. Thay vào đó, app hiển thị trạng thái ngoại tuyến và nút thử lại.
 
-Quan trọng nhất, tracking local vẫn ghi SQLite nếu GPS hoạt động. Khi Internet quay lại, các chuyến hoàn thành đang chờ có thể được đồng bộ thủ công hoặc được thử lại một lần theo luồng reconnect.
+Quan trọng nhất, runtime trên thiết bị Android thật đã xác nhận tracking local vẫn ghi SQLite khi app chạy nền, khóa màn hình hoặc mất Internet nếu GPS vẫn hoạt động. Khi Internet quay lại, các chuyến hoàn thành đang chờ được đồng bộ lên Firestore theo luồng reconnect.
 
 ## 8. Demo Fleet Map
 
@@ -124,16 +124,17 @@ Settings cho phép đổi tên thiết bị, bật hoặc tắt tracking tự đ
 
 Các màn hình tài khoản gồm:
 
-- Hồ sơ tài khoản.
-- Đổi mật khẩu.
-- Thiết bị đang đăng nhập.
-- Quản lý thiết bị của tôi.
+- Account Center cho tài khoản và thiết bị.
+- Đổi mật khẩu ở màn riêng.
+- Thiết bị đang đăng nhập ở chế độ chỉ đọc.
+- Đăng xuất một thiết bị qua flow chọn phiên riêng.
+- Quản lý thiết bị của tôi để đổi tên và đổi màu trên bản đồ.
 - Đổi màu marker thiết bị trên bản đồ trực tiếp.
 - Tuỳ chọn thông báo.
 - Trạng thái đồng bộ.
 - Nhật ký bảo mật.
 
-Các thao tác nhạy cảm như đổi mật khẩu, kick thiết bị hoặc đăng xuất tất cả yêu cầu nhập lại mật khẩu. Tuy nhiên, vì dự án chưa có backend Admin SDK, kick thiết bị là cơ chế app-level qua Firestore, chưa phải thu hồi token Firebase toàn cục.
+Các thao tác nhạy cảm như đổi mật khẩu, đăng xuất một thiết bị, xóa thiết bị hoặc đăng xuất tất cả yêu cầu nhập lại mật khẩu. Tuy nhiên, vì dự án chưa có backend Admin SDK, đăng xuất thiết bị là cơ chế app-level qua Firestore, chưa phải thu hồi token Firebase toàn cục.
 
 ## 12. Ưu Điểm
 
@@ -162,7 +163,7 @@ Trong tương lai, dự án có thể mở rộng:
 - Phân quyền người dùng.
 - Web dashboard.
 - Backend bảo mật với Admin SDK.
-- Tracking nền bền vững hơn.
+- iOS background tracking sau khi kiểm thử bằng iOS Development Build.
 
 Những phần này hiện chưa được triển khai trong source code, nên khi demo cần nói rõ là định hướng tương lai.
 
@@ -170,7 +171,7 @@ Những phần này hiện chưa được triển khai trong source code, nên k
 
 Track Device là một ứng dụng GPS tracking local-first, tập trung vào theo dõi nhiều thiết bị, lưu lịch sử hành trình, hỗ trợ offline và đồng bộ cloud.
 
-Dự án đã có nền tảng kỹ thuật quan trọng: Firebase Auth, Firestore, SQLite, TrackingEngine, Fleet Map, History, Playback, Permission Wizard, cache offline và account/security UI. Một số phần native như tracking nền bền vững và foreground service notification vẫn cần kiểm thử trên Android Development Build hoặc EAS APK.
+Dự án đã có nền tảng kỹ thuật quan trọng: Firebase Auth, Firestore, SQLite, TrackingEngine, Fleet Map, History, Playback, Permission Wizard, cache offline và account/security UI. Android runtime đã xác nhận tracking nền, lock-screen tracking, offline recording, reconnect sync và foreground notification update. iOS background tracking vẫn cần kiểm thử riêng bằng iOS Development Build.
 
 Em xin cảm ơn thầy cô và các bạn đã lắng nghe. Em sẵn sàng trả lời câu hỏi.
 
@@ -264,7 +265,7 @@ Không. iOS không có foreground-service notification tương đương trong so
 Không đầy đủ. Cần Android Development Build hoặc EAS APK.
 
 30. Tracking nền đã hoàn chỉnh chưa?
-Chưa. TaskManager đã có nhưng chưa phục hồi đầy đủ auth, localDeviceId và active trip khi runtime không còn hoạt động.
+Trên Android, luồng nền đã được xác nhận runtime: app vẫn ghi GPS khi ở nền/khóa màn hình, offline vẫn ghi SQLite và notification vẫn cập nhật. Tuy nhiên force-stop sẽ dừng background execution, swipe-away có thể khác nhau theo hãng Android và iOS chưa được xác nhận bằng Development Build.
 
 31. App có quản lý thiết bị đang đăng nhập không?
 Có màn hình thiết bị đang đăng nhập và cơ chế app-level session flags.
@@ -288,7 +289,7 @@ Không. Soft delete thiết bị không đồng nghĩa xóa toàn bộ lịch s�
 Có, thông qua `react-native-maps`, chủ yếu cho Fleet Map và Playback.
 
 38. Có cần bảo vệ Google Maps key không?
-Có. Hiện key nằm trong cấu hình app, production nên chuyển sang quản lý build-time an toàn hơn.
+Có. Track Device không commit key thật. Google Maps Android key được đưa vào lúc build qua biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`, và khi phát hành cần giới hạn theo package Android cùng SHA-1 certificate.
 
 39. Dự án phù hợp mở rộng theo hướng nào?
 Geofence, cảnh báo tốc độ, thống kê đội thiết bị, quản lý xe thuê, web dashboard và backend bảo mật.

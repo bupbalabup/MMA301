@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EmptyStateIllustration } from '../../components/branding';
 import { TrackIcon } from '../../components/icons';
-import { DeviceMapMarker, MapErrorBoundary } from '../../components/map';
+import { DeviceMapMarker, MapErrorBoundary, MapRecenterButton } from '../../components/map';
 import { InfoRow, StatusBadge } from '../../components/ui';
 import { useConnectivity, useDevice, useLiveDevice } from '../../contexts';
 import { colors, radius, shadows, spacing, typography } from '../../theme';
@@ -171,6 +171,7 @@ export default function FleetMapScreen() {
   const [selectedMapDeviceId, setSelectedMapDeviceId] = useState(localDeviceId);
   const [panelExpanded, setPanelExpanded] = useState(false);
   const [trackMarkerChanges, setTrackMarkerChanges] = useState(true);
+  const [currentMapRegion, setCurrentMapRegion] = useState(null);
 
   const devicesWithCoordinates = useMemo(
     () => fleetDevices.filter((device) => device.hasValidCoordinate),
@@ -208,6 +209,23 @@ export default function FleetMapScreen() {
     return () => clearTimeout(timerId);
   }, [markerAppearanceKey, selectedMapDeviceId]);
 
+  const panelResponder = useMemo(
+    () => PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 8,
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy < -24) {
+          setPanelExpanded(true);
+          return;
+        }
+
+        if (gestureState.dy > 24) {
+          setPanelExpanded(false);
+        }
+      },
+    }),
+    []
+  );
+
   function fitAllMarkers() {
     if (!mapRef.current || devicesWithCoordinates.length === 0) {
       return;
@@ -226,6 +244,16 @@ export default function FleetMapScreen() {
       animated: true,
       edgePadding: { bottom: 80, left: 48, right: 48, top: 100 },
     });
+  }
+
+  function recenterToUser(coords) {
+    const region = currentMapRegion ?? initialRegion;
+    mapRef.current?.animateToRegion({
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      latitudeDelta: region.latitudeDelta,
+      longitudeDelta: region.longitudeDelta,
+    }, 500);
   }
 
   useEffect(() => {
@@ -271,7 +299,8 @@ export default function FleetMapScreen() {
             ref={mapRef}
             style={styles.map}
             initialRegion={initialRegion}
-            showsUserLocation={false}
+            onRegionChangeComplete={setCurrentMapRegion}
+            showsUserLocation
             showsMyLocationButton={false}
           >
             {markerDevicesWithCoordinates.map((fleetDevice) => (
@@ -296,7 +325,7 @@ export default function FleetMapScreen() {
           </MapView>
         </MapErrorBoundary>
 
-        <View style={[styles.topOverlay, shadows.floating]} pointerEvents="box-none">
+        <View style={[styles.topOverlay, shadows.floating, { top: insets.top + spacing.md }]} pointerEvents="box-none">
           <Text style={styles.overlayTitle}>Bản đồ thiết bị</Text>
           <Text style={styles.overlaySub}>{onlineCount} trực tuyến, {Math.max(0, devices.length - onlineCount)} mất kết nối</Text>
         </View>
@@ -313,11 +342,26 @@ export default function FleetMapScreen() {
         </Pressable>
 
         {(devicesLoading || fleetLoading) ? (
-          <View style={styles.loadingBadge}><Text style={styles.loadingBadgeText}>Đang tải...</Text></View>
+          <View style={[styles.loadingBadge, { top: insets.top + spacing.lg }]}><Text style={styles.loadingBadgeText}>Đang tải...</Text></View>
         ) : null}
+
+        <MapRecenterButton
+          bottom={spacing.lg + 58}
+          onLocation={recenterToUser}
+          right={spacing.lg}
+        />
       </View>
 
-      <View style={[styles.bottomPanel, shadows.floating, { paddingBottom: insets.bottom + spacing.md }]}>
+      <View
+        {...panelResponder.panHandlers}
+        style={[
+          styles.bottomPanel,
+          shadows.floating,
+          panelExpanded && styles.bottomPanelExpanded,
+          { paddingBottom: insets.bottom + spacing.md },
+        ]}
+      >
+        <View style={styles.sheetHandle} />
         {hasListenerErrors ? (
           <Text style={styles.listenerWarning}>Một số thiết bị đang hiển thị dữ liệu đã lưu gần nhất.</Text>
         ) : null}
@@ -358,7 +402,8 @@ export default function FleetMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  bottomPanel: { alignSelf: 'stretch', backgroundColor: colors.surface, maxHeight: '44%', minWidth: 0, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, width: '100%' },
+  bottomPanel: { alignSelf: 'stretch', backgroundColor: colors.surface, maxHeight: '32%', minWidth: 0, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, width: '100%' },
+  bottomPanelExpanded: { maxHeight: '88%' },
   detailContent: { alignSelf: 'stretch', minWidth: 0, paddingBottom: spacing.sm, width: '100%' },
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   detailHeader: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
@@ -394,5 +439,6 @@ const styles = StyleSheet.create({
   statusLabel: { ...typography.label, color: colors.textMuted, marginRight: spacing.sm },
   statusLabelRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   statusRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
+  sheetHandle: { alignSelf: 'center', backgroundColor: colors.borderStrong, borderRadius: radius.pill, height: 4, marginBottom: spacing.sm, width: 44 },
   topOverlay: { backgroundColor: colors.surface, borderRadius: radius.medium, left: spacing.lg, maxWidth: '70%', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, position: 'absolute', top: spacing.lg },
 });

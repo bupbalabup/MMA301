@@ -11,6 +11,7 @@ export {
 export {
   getLastForegroundService,
   isAndroidForegroundLocationSupported,
+  registerBackgroundLocationProcessor,
   startAndroidForegroundLocationUpdates,
   stopAndroidForegroundLocationUpdates,
   subscribeToLocationTask,

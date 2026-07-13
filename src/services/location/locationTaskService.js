@@ -7,6 +7,7 @@ import { LIVE_TRACKING_NOTIFICATION } from '../../constants/notification';
 
 const listeners = new Set();
 let lastForegroundService = null;
+let backgroundLocationProcessor = null;
 
 function notifyLocations(locations = []) {
   locations.forEach((location) => {
@@ -18,13 +19,32 @@ function notifyLocations(locations = []) {
 
 TaskManager.defineTask(
   LIVE_TRACKING_NOTIFICATION.TASK_NAME,
-  ({ data, error }) => {
+  async ({ data, error }) => {
     if (error) {
-      console.warn('[LocationTaskService] Background location task error.', error);
+      console.warn('[BG_LOCATION_TASK] Background location task error.', error);
       return;
     }
 
-    notifyLocations(data?.locations ?? []);
+    const locations = data?.locations ?? [];
+    if (__DEV__) {
+      console.log('[BG_LOCATION_TASK] invoked', {
+        count: locations.length,
+        firstTimestamp: locations[0]?.timestamp ?? null,
+      });
+    }
+
+    if (backgroundLocationProcessor) {
+      for (const location of locations) {
+        try {
+          await backgroundLocationProcessor(location);
+        } catch (processorError) {
+          console.warn('[BG_PROCESSOR] Background processor failed.', processorError);
+        }
+      }
+      return;
+    }
+
+    notifyLocations(locations);
   }
 );
 
@@ -43,6 +63,16 @@ export function subscribeToLocationTask(callback) {
 
   return () => {
     listeners.delete(callback);
+  };
+}
+
+export function registerBackgroundLocationProcessor(callback) {
+  backgroundLocationProcessor = callback;
+
+  return () => {
+    if (backgroundLocationProcessor === callback) {
+      backgroundLocationProcessor = null;
+    }
   };
 }
 

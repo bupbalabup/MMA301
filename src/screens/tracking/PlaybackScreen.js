@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,7 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from '@react-navigation/native';
 
 import { HISTORY_SOURCE } from '../../constants/history';
-import { MapErrorBoundary } from '../../components/map';
+import { MapErrorBoundary, MapRecenterButton } from '../../components/map';
 import { useAuth, useDevice } from '../../contexts';
 import { getTripPlaybackBySource } from '../../services/tracking';
 import { interpolateGpsPosition } from '../../utils/geo';
@@ -142,6 +142,7 @@ export default function PlaybackScreen({ route }) {
   const [playbackSpeed, setPlaybackSpeed] = useState(4);
   const [playbackOffsetMs, setPlaybackOffsetMs] = useState(0);
   const [hasFitMap, setHasFitMap] = useState(false);
+  const [currentMapRegion, setCurrentMapRegion] = useState(null);
 
   const playbackDeviceName = useMemo(() => {
     const matchedDevice = devices.find((device) => {
@@ -309,6 +310,16 @@ export default function PlaybackScreen({ route }) {
     setPlaybackOffsetMs(Math.min(1, Math.max(0, locationX / width)) * playbackTiming.durationMs);
   }
 
+  function recenterToUser(coords) {
+    const region = currentMapRegion ?? initialRegion;
+    mapRef.current?.animateToRegion({
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      latitudeDelta: region.latitudeDelta,
+      longitudeDelta: region.longitudeDelta,
+    }, 500);
+  }
+
   // -- State screens --
   if (loading) {
     return (
@@ -384,7 +395,8 @@ export default function PlaybackScreen({ route }) {
           ref={mapRef}
           style={styles.map}
           initialRegion={initialRegion}
-          showsUserLocation={false}
+          onRegionChangeComplete={setCurrentMapRegion}
+          showsUserLocation
           showsMyLocationButton={false}
           followsUserLocation={false}
         >
@@ -433,6 +445,11 @@ export default function PlaybackScreen({ route }) {
           )}
           </MapView>
         </MapErrorBoundary>
+        <MapRecenterButton
+          bottom={spacing.lg}
+          onLocation={recenterToUser}
+          right={spacing.lg}
+        />
       </View>
 
       <View style={[styles.pointInfoPanel, shadows.card]}>

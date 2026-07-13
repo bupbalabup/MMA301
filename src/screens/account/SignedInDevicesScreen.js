@@ -1,20 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import PasswordConfirmModal from '../../components/security/PasswordConfirmModal';
 import {
-  DangerButton,
   InfoRow,
   SurfaceCard,
 } from '../../components/ui';
-import { useAuth, useDevice } from '../../contexts';
-import {
-  logSecurityEvent,
-  revokeAllDeviceSessions,
-  revokeDeviceSession,
-  SECURITY_ACTIONS,
-} from '../../services/firebase/accountSecurityService';
+import { useDevice } from '../../contexts';
 import { colors, spacing, typography } from '../../theme';
 import {
   formatTimestampValue,
@@ -26,68 +18,11 @@ import {
 
 export default function SignedInDevicesScreen() {
   const insets = useSafeAreaInsets();
-  const { confirmPassword, logout, user } = useAuth();
-  const {
-    devices,
-    localDeviceId,
-    localDeviceName,
-    refreshDevices,
-    selectedDevice,
-  } = useDevice();
-  const [confirmTarget, setConfirmTarget] = useState(null);
-  const [confirmMode, setConfirmMode] = useState(null);
-  const [confirmLoading, setConfirmLoading] = useState(false);
-  const [confirmError, setConfirmError] = useState('');
-  const [message, setMessage] = useState('');
+  const { devices, localDeviceId } = useDevice();
 
   const visibleDevices = useMemo(() => {
     return devices.filter((device) => device.status !== 'deleted');
   }, [devices]);
-
-  async function handleConfirm(password) {
-    if (!user?.uid) return;
-
-    setConfirmLoading(true);
-    setConfirmError('');
-    setMessage('');
-
-    try {
-      await confirmPassword(password);
-
-      if (confirmMode === 'all') {
-        await revokeAllDeviceSessions(user.uid, 'logout_all');
-        await logSecurityEvent(user.uid, {
-          action: SECURITY_ACTIONS.LOGOUT_ALL,
-          deviceId: localDeviceId,
-          deviceName: localDeviceName,
-          platform: selectedDevice?.platform,
-        });
-        await logout();
-        return;
-      }
-
-      if (confirmMode === 'device' && confirmTarget?.deviceId) {
-        await revokeDeviceSession(user.uid, confirmTarget.deviceId, 'kick_device');
-        await logSecurityEvent(user.uid, {
-          action: SECURITY_ACTIONS.KICK_DEVICE,
-          deviceId: localDeviceId,
-          deviceName: localDeviceName,
-          platform: selectedDevice?.platform,
-          targetDeviceId: confirmTarget.deviceId,
-          targetDeviceName: getDeviceDisplayName(confirmTarget),
-        });
-        await refreshDevices();
-        setMessage('Đã gửi yêu cầu đăng xuất thiết bị.');
-      }
-
-      setConfirmTarget(null);
-      setConfirmMode(null);
-    } catch (error) {
-      setConfirmError(error.message ?? 'Không thể xác nhận mật khẩu.');
-    } finally {
-      setConfirmLoading(false);
-    }
-  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
@@ -97,10 +32,15 @@ export default function SignedInDevicesScreen() {
       >
         <Text style={styles.title}>Thiết bị đang đăng nhập</Text>
         <Text style={styles.description}>
-          Danh sách phiên đăng nhập được quản lý bằng trạng thái thiết bị trong tài khoản.
+          Danh sách phiên đăng nhập hiện được quản lý ở cấp ứng dụng.
         </Text>
 
-        {message ? <Text style={styles.message}>{message}</Text> : null}
+        {visibleDevices.length === 0 ? (
+          <SurfaceCard style={styles.card}>
+            <Text style={styles.emptyTitle}>Không có phiên đăng nhập</Text>
+            <Text style={styles.emptyText}>Thiết bị đăng nhập sẽ xuất hiện tại đây.</Text>
+          </SurfaceCard>
+        ) : null}
 
         {visibleDevices.map((device) => {
           const isCurrentDevice = device.deviceId === localDeviceId;
@@ -116,60 +56,15 @@ export default function SignedInDevicesScreen() {
               <InfoRow label="Thời gian đăng nhập" value={formatTimestampValue(device.sessionStartedAt)} />
               <InfoRow label="Hoạt động gần nhất" value={formatTimestampValue(device.lastActiveAt ?? device.updatedAt)} />
               <InfoRow label="Trạng thái" value={getSessionStatusLabel(device)} last />
-              {!isCurrentDevice ? (
-                <DangerButton
-                  label="Đăng xuất thiết bị này"
-                  onPress={() => {
-                    setConfirmTarget(device);
-                    setConfirmMode('device');
-                    setConfirmError('');
-                  }}
-                  style={styles.button}
-                />
-              ) : null}
             </SurfaceCard>
           );
         })}
-
-        <SurfaceCard style={styles.card}>
-          <Text style={styles.sectionTitle}>Đăng xuất tất cả thiết bị</Text>
-          <Text style={styles.description}>
-            Thiết bị hiện tại cũng sẽ đăng xuất sau khi xác nhận mật khẩu.
-          </Text>
-          <DangerButton
-            label="Đăng xuất tất cả thiết bị"
-            onPress={() => {
-              setConfirmMode('all');
-              setConfirmTarget(null);
-              setConfirmError('');
-            }}
-            style={styles.button}
-          />
-        </SurfaceCard>
       </ScrollView>
-
-      <PasswordConfirmModal
-        error={confirmError}
-        loading={confirmLoading}
-        onCancel={() => {
-          if (!confirmLoading) {
-            setConfirmMode(null);
-            setConfirmTarget(null);
-            setConfirmError('');
-          }
-        }}
-        onConfirm={handleConfirm}
-        title="Nhập mật khẩu để xác nhận."
-        visible={Boolean(confirmMode)}
-      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    marginTop: spacing.md,
-  },
   card: {
     marginTop: spacing.md,
   },
@@ -196,18 +91,18 @@ const styles = StyleSheet.create({
     ...typography.cardTitle,
     color: colors.textPrimary,
   },
-  message: {
-    ...typography.caption,
-    color: colors.success,
-    marginTop: spacing.md,
+  emptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  emptyTitle: {
+    ...typography.cardTitle,
+    color: colors.textPrimary,
   },
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  sectionTitle: {
-    ...typography.cardTitle,
-    color: colors.textPrimary,
   },
   title: {
     ...typography.screenTitle,
