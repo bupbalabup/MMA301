@@ -4,6 +4,7 @@ import { updateLiveLocation } from '../firebase/liveLocationService';
 import {
   DEFAULT_GPS_INTERVAL_MS,
   GPS_LOST_TIMEOUT_MS,
+  LIVE_LOCATION_HEARTBEAT_INTERVAL_MS,
   PARKING_DURATION_MS,
   TEMPORARY_STOP_DURATION_MS,
   TRACKING_STATUS,
@@ -55,6 +56,8 @@ const state = {
   connectionStatus: CONNECTION_STATUS.ONLINE,
   activeTripId: null,
   activeTrip: null,
+  activeTripPointCount: 0,
+  activeTripSpeedSumKmh: 0,
   startedAt: null,
   currentSpeedKmh: 0,
   activeTripMaxSpeedKmh: 0,
@@ -66,6 +69,8 @@ const state = {
   lastMeaningfulMovementAt: null,
   parkingCandidateStartedAt: null,
   lastGpsAt: null,
+  lastLivePublishAttemptAt: null,
+  lastLivePublishedAt: null,
   motionDetectionState: createMotionDetectionState(),
   recentSpeedSamplesKmh: [],
   isCompletingTrip: false,
@@ -83,6 +88,8 @@ function buildTaskStateSnapshot() {
     activeTrip: state.activeTrip,
     activeTripId: state.activeTripId,
     activeTripMaxSpeedKmh: state.activeTripMaxSpeedKmh,
+    activeTripPointCount: state.activeTripPointCount,
+    activeTripSpeedSumKmh: state.activeTripSpeedSumKmh,
     connectionStatus: state.connectionStatus,
     currentSpeedKmh: state.currentSpeedKmh,
     deviceId: state.deviceId,
@@ -90,6 +97,8 @@ function buildTaskStateSnapshot() {
     isInitialized: state.isInitialized,
     lastGpsAt: state.lastGpsAt,
     lastGpsPoint: state.lastGpsPoint,
+    lastLivePublishAttemptAt: state.lastLivePublishAttemptAt,
+    lastLivePublishedAt: state.lastLivePublishedAt,
     lastMeaningfulMovementAt: state.lastMeaningfulMovementAt,
     motionDetectionState: state.motionDetectionState,
     movementStatus: state.movementStatus,
@@ -131,6 +140,11 @@ async function restoreTaskStateIfNeeded() {
 
   Object.assign(state, {
     ...snapshot,
+    activeTripPointCount: Math.max(0, snapshot.activeTripPointCount ?? 0),
+    activeTripSpeedSumKmh: Math.max(
+      0,
+      snapshot.activeTripSpeedSumKmh ?? 0
+    ),
     isCompletingTrip: false,
     motionDetectionState: createMotionDetectionState(
       snapshot.motionDetectionState
@@ -366,254 +380,6 @@ function beginStoppedDuration(timestamp) {
   startStoppedDurationTimer();
 }
 
-function getDistanceMeters(pointA, pointB) {
-  return calculateDistanceKm(pointA, pointB) * METERS_PER_KILOMETER;
-}
-
-function isPointCoordinateUsable(point) {
-  return (
-    Number.isFinite(point?.latitude) &&
-    Number.isFinite(point?.longitude) &&
-    point.latitude >= -90 &&
-    point.latitude <= 90 &&
-    point.longitude >= -180 &&
-    point.longitude <= 180
-  );
-}
-
-function isPointTimestampUsable(point) {
-  return Number.isFinite(point?.timestamp) && point.timestamp > 0;
-}
-
-function logRejectedGpsPoint({
-  accuracy,
-  distanceMeters,
-  elapsedTimeMs,
-  reason,
-  rawSpeedKmh,
-}) {
-  if (!__DEV__) {
-    return;
-  }
-
-  console.log('[SPEED_REJECT]', {
-    reason,
-    rawSpeedKmh,
-    distanceMeters,
-    elapsedTimeMs,
-    accuracy,
-  });
-}
-
-function clearPendingSpikePoints({
-  logRejected = false,
-  reason = 'inconsistent_high_speed_candidate',
-} = {}) {
-  if (state.pendingSpikePoints.length === 0) {
-    return;
-  }
-
-  if (logRejected) {
-    const rejectedPoint = state.pendingSpikePoints[0];
-    const elapsedTimeMs = state.lastGpsPoint
-      ? rejectedPoint.timestamp - state.lastGpsPoint.timestamp
-      : 0;
-    const distanceMeters = state.lastGpsPoint
-      ? getDistanceMeters(state.lastGpsPoint, rejectedPoint)
-      : 0;
-
-    logRejectedGpsPoint({
-      accuracy: rejectedPoint.accuracy,
-      distanceMeters,
-      elapsedTimeMs,
-      reason,
-      rawSpeedKmh: rejectedPoint.rawSpeedKmh,
-    });
-  }
-
-  setState({ pendingSpikePoints: [] });
-}
-
-function areSpikePointsConsistent(previousAcceptedPoint, pendingPoints) {
-  if (pendingPoints.length < SPIKE_CONFIRMATION_COUNT) {
-    return false;
-  }
-
-  let previousPoint = previousAcceptedPoint;
-  let previousVector = null;
-
-  for (const point of pendingPoints) {
-    if (!previousPoint) {
-      previousPoint = point;
-      continue;
-    }
-
-    const elapsedTimeMs = point.timestamp - previousPoint.timestamp;
-    const distanceMeters = getDistanceMeters(previousPoint, point);
-    const currentVector = {
-      latitude: point.latitude - previousPoint.latitude,
-      longitude: point.longitude - previousPoint.longitude,
-    };
-
-    if (
-      elapsedTimeMs < MIN_VALID_POINT_INTERVAL_MS ||
-      !Number.isFinite(distanceMeters) ||
-      distanceMeters > MAX_JUMP_DISTANCE_METERS
-    ) {
-      return false;
-    }
-
-    if (previousVector) {
-      const dotProduct =
-        previousVector.latitude * currentVector.latitude +
-        previousVector.longitude * currentVector.longitude;
-
-      if (!Number.isFinite(dotProduct) || dotProduct <= 0) {
-        return false;
-      }
-    }
-
-    previousVector = currentVector;
-    previousPoint = point;
-  }
-
-  return true;
-}
-
-function validateGpsPointCandidate(currentPoint, previousAcceptedPoint) {
-  const accuracy = currentPoint.accuracy;
-
-  if (!isPointCoordinateUsable(currentPoint)) {
-    clearPendingSpikePoints({ logRejected: true });
-    return {
-      accepted: false,
-      shouldLog: true,
-      reason: 'invalid_coordinates',
-      distanceMeters: 0,
-      elapsedTimeMs: 0,
-    };
-  }
-
-  if (!isPointTimestampUsable(currentPoint)) {
-    clearPendingSpikePoints({ logRejected: true });
-    return {
-      accepted: false,
-      shouldLog: true,
-      reason: 'invalid_timestamp',
-      distanceMeters: 0,
-      elapsedTimeMs: 0,
-    };
-  }
-
-  if (
-    Number.isFinite(accuracy) &&
-    accuracy > MAX_ACCEPTABLE_ACCURACY_METERS
-  ) {
-    clearPendingSpikePoints({ logRejected: true });
-    return {
-      accepted: false,
-      shouldLog: true,
-      reason: 'poor_accuracy',
-      distanceMeters: 0,
-      elapsedTimeMs: previousAcceptedPoint
-        ? currentPoint.timestamp - previousAcceptedPoint.timestamp
-        : 0,
-    };
-  }
-
-  if (!previousAcceptedPoint) {
-    clearPendingSpikePoints({ logRejected: true });
-    return {
-      accepted: true,
-      distanceMeters: 0,
-      elapsedTimeMs: 0,
-    };
-  }
-
-  const elapsedTimeMs = currentPoint.timestamp - previousAcceptedPoint.timestamp;
-  const distanceMeters = getDistanceMeters(previousAcceptedPoint, currentPoint);
-  const rawSpeedKmh = currentPoint.rawSpeedKmh;
-
-  if (elapsedTimeMs <= 0) {
-    clearPendingSpikePoints({ logRejected: true });
-    return {
-      accepted: false,
-      shouldLog: true,
-      reason: 'non_increasing_timestamp',
-      distanceMeters,
-      elapsedTimeMs,
-    };
-  }
-
-  if (elapsedTimeMs < MIN_VALID_POINT_INTERVAL_MS) {
-    clearPendingSpikePoints({ logRejected: true });
-    return {
-      accepted: false,
-      shouldLog: true,
-      reason: 'interval_too_short',
-      distanceMeters,
-      elapsedTimeMs,
-    };
-  }
-
-  if (
-    distanceMeters > MAX_JUMP_DISTANCE_METERS &&
-    rawSpeedKmh > SINGLE_POINT_SPIKE_SPEED_KMH
-  ) {
-    clearPendingSpikePoints({ logRejected: true });
-    return {
-      accepted: false,
-      shouldLog: true,
-      reason: 'impossible_jump',
-      distanceMeters,
-      elapsedTimeMs,
-    };
-  }
-
-  if (rawSpeedKmh > SINGLE_POINT_SPIKE_SPEED_KMH) {
-    const pendingSpikePoints = [...state.pendingSpikePoints, currentPoint];
-    const isConfirmed = areSpikePointsConsistent(
-      previousAcceptedPoint,
-      pendingSpikePoints
-    );
-
-    if (!isConfirmed) {
-      if (pendingSpikePoints.length >= SPIKE_CONFIRMATION_COUNT) {
-        setState({ pendingSpikePoints });
-        clearPendingSpikePoints({
-          logRejected: true,
-          reason: 'inconsistent_high_speed_candidate',
-        });
-      } else {
-        setState({ pendingSpikePoints });
-      }
-
-      return {
-        accepted: false,
-        shouldLog: false,
-        reason: 'pending_high_speed_confirmation',
-        distanceMeters,
-        elapsedTimeMs,
-      };
-    }
-
-    clearPendingSpikePoints();
-    return {
-      accepted: true,
-      distanceMeters,
-      elapsedTimeMs,
-      confirmedSpike: true,
-    };
-  }
-
-  clearPendingSpikePoints({ logRejected: true });
-  return {
-    accepted: true,
-    distanceMeters,
-    elapsedTimeMs,
-  };
-}
-
 export function configureTrackingNotification({
   deviceName,
   isNetworkOnline,
@@ -646,25 +412,6 @@ export function configureTrackingNotification({
     persistTaskState();
     refreshForegroundNotification({ force: true });
   }
-}
-
-function hasMeaningfulMovement(point) {
-  if (point.speedKmh > MOVING_SPEED_THRESHOLD_KMH) {
-    return true;
-  }
-
-  if (state.activeTripId) {
-    return false;
-  }
-
-  if (!state.lastParkingLocation) {
-    return false;
-  }
-
-  return (
-    getDistanceMeters(state.lastParkingLocation, point) >
-    MOVING_DISTANCE_THRESHOLD_METERS
-  );
 }
 
 function getStoppedDurationMs(timestamp = Date.now()) {
@@ -780,6 +527,8 @@ async function ensureActiveTrip(location) {
     activeTrip: trip,
     activeTripId: trip.id,
     activeTripMaxSpeedKmh: 0,
+    activeTripPointCount: 0,
+    activeTripSpeedSumKmh: 0,
     startedAt: trip.startTime,
   });
 
@@ -812,9 +561,10 @@ async function completeActiveTrip(endTime = getParkingTripEndTime()) {
         activeTrip: null,
         activeTripId: null,
         activeTripMaxSpeedKmh: 0,
+        activeTripPointCount: 0,
+        activeTripSpeedSumKmh: 0,
         startedAt: null,
         parkingCandidateStartedAt: null,
-        lastMeaningfulGpsPoint: null,
         isCompletingTrip: false,
       });
     } else {
@@ -828,6 +578,101 @@ async function completeActiveTrip(endTime = getParkingTripEndTime()) {
   }
 }
 
+async function publishProcessedLocation(point, movementStatus) {
+  const attemptedAt = Date.now();
+  state.lastLivePublishAttemptAt = attemptedAt;
+
+  try {
+    await publishLiveLocation(point, movementStatus, state.activeTripId);
+    if (__DEV__) {
+      console.log('[BG_SYNC] liveLocation publish attempted');
+    }
+    setState({
+      connectionStatus: CONNECTION_STATUS.ONLINE,
+      lastLivePublishedAt: attemptedAt,
+    });
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[BG_SYNC] liveLocation publish failed', error);
+    }
+    setState({ connectionStatus: CONNECTION_STATUS.OFFLINE });
+  }
+}
+
+async function publishPresenceHeartbeatIfDue() {
+  if (!state.lastGpsPoint) {
+    return;
+  }
+
+  const now = Date.now();
+  if (
+    state.lastLivePublishAttemptAt &&
+    now - state.lastLivePublishAttemptAt <
+      LIVE_LOCATION_HEARTBEAT_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  if (__DEV__) {
+    console.log('[BG_SYNC] publishing live presence heartbeat', {
+      lastLocationTimestamp: state.lastGpsPoint.timestamp ?? null,
+    });
+  }
+
+  await publishProcessedLocation(
+    {
+      ...state.lastGpsPoint,
+      speedKmh: state.currentSpeedKmh,
+    },
+    state.movementStatus
+  );
+}
+
+async function advanceSuppressedStationarySample(processedSample) {
+  const timestamp = processedSample.currentPoint?.timestamp;
+  if (!Number.isFinite(timestamp)) {
+    return;
+  }
+
+  if (state.activeTripId && !state.parkingCandidateStartedAt) {
+    setState({ parkingCandidateStartedAt: timestamp });
+    beginStoppedDuration(timestamp);
+  } else if (state.activeTripId) {
+    beginStoppedDuration(timestamp);
+  }
+
+  const stoppedMovementStatus = state.activeTripId
+    ? getStoppedMovementStatus(timestamp)
+    : TRACKING_STATUS.PARKING;
+
+  if (
+    stoppedMovementStatus === TRACKING_STATUS.PARKING &&
+    state.activeTripId
+  ) {
+    await completeActiveTrip(getParkingTripEndTime());
+  }
+
+  setState({
+    currentSpeedKmh: 0,
+    movementStatus: stoppedMovementStatus,
+  });
+
+  if (processedSample.shouldPublishHeartbeat) {
+    const stationaryCenter =
+      processedSample.nextMotionState?.stationaryCenter ?? state.lastGpsPoint;
+    if (stationaryCenter) {
+      await publishProcessedLocation(
+        {
+          ...stationaryCenter,
+          speedKmh: 0,
+          timestamp,
+        },
+        stoppedMovementStatus
+      );
+    }
+  }
+}
+
 async function handleLocationUpdate(location) {
   if (!state.isEnabled || !state.deviceId || state.isCompletingTrip) {
     return;
@@ -835,127 +680,58 @@ async function handleLocationUpdate(location) {
 
   startGpsLostTimer();
 
-  const pointWithoutSpeed = normalizeLocationToPoint(location);
-  const timestamp = pointWithoutSpeed.timestamp;
-  const speedResult = resolveLocationSpeed({
-    currentPoint: pointWithoutSpeed,
+  const processedSample = processMotionSample({
     location,
-    previousPoint: state.lastGpsPoint,
+    motionState: state.motionDetectionState,
+    previousAcceptedPoint: state.lastGpsPoint,
     recentSpeedSamplesKmh: state.recentSpeedSamplesKmh,
   });
+  const currentPoint = processedSample.currentPoint;
 
-  if (!speedResult.accepted) {
-    logRejectedGpsPoint({
-      accuracy: pointWithoutSpeed.accuracy,
-      distanceMeters: state.lastGpsPoint
-        ? getDistanceMeters(state.lastGpsPoint, pointWithoutSpeed)
-        : 0,
-      elapsedTimeMs: state.lastGpsPoint
-        ? pointWithoutSpeed.timestamp - state.lastGpsPoint.timestamp
-        : 0,
-      reason: speedResult.reason,
-      rawSpeedKmh: speedResult.coordinateSpeedKmh,
-    });
-    return;
-  }
-
-  const rawSpeedKmh = speedResult.coordinateSpeedKmh;
-  const currentPoint = {
-    ...pointWithoutSpeed,
-    rawSpeedKmh,
-    speedKmh: speedResult.speedKmh,
-  };
-
-  if (
-    state.lastGpsPoint?.timestamp &&
-    currentPoint.timestamp <= state.lastGpsPoint.timestamp
-  ) {
-    if (__DEV__) {
-      console.log('[BG_SQLITE] duplicate point skipped', {
-        incomingTimestamp: currentPoint.timestamp,
-        lastTimestamp: state.lastGpsPoint.timestamp,
-      });
-    }
-    return;
-  }
-
-  const validation = validateGpsPointCandidate(currentPoint, state.lastGpsPoint);
-
-  if (!validation.accepted) {
-    if (__DEV__) {
-      console.log('[BG_PROCESSOR] point rejected', {
-        reason: validation.reason,
-        timestamp: currentPoint.timestamp,
+  if (!processedSample.accepted) {
+    if (Number.isFinite(currentPoint?.timestamp)) {
+      setState({
+        lastGpsAt: currentPoint.timestamp,
+        motionDetectionState: createMotionDetectionState(
+          processedSample.nextMotionState
+        ),
+        recentSpeedSamplesKmh: processedSample.nextSpeedSamplesKmh,
       });
     }
 
-    if (validation.shouldLog) {
-      logRejectedGpsPoint({
-        accuracy: currentPoint.accuracy,
-        distanceMeters: validation.distanceMeters,
-        elapsedTimeMs: validation.elapsedTimeMs,
-        reason: validation.reason,
-        rawSpeedKmh,
-      });
+    if (processedSample.shouldAdvanceStationaryState) {
+      await advanceSuppressedStationarySample(processedSample);
+    } else if (
+      processedSample.shouldResetStationaryTimer &&
+      state.activeTripId
+    ) {
+      resetStoppedDuration();
+      setState({ parkingCandidateStartedAt: null });
     }
 
+    await publishPresenceHeartbeatIfDue();
     return;
   }
 
-  if (__DEV__) {
-    console.log('[SPEED_ACCEPT]', {
-      accuracyMeters: currentPoint.accuracy,
-      canonicalSpeedKmh: Number(currentPoint.speedKmh.toFixed(1)),
-      coordinateSpeedKmh: Number(rawSpeedKmh.toFixed(1)),
-      elapsedTimeMs: speedResult.elapsedTimeMs,
-      nativeSpeedKmh: Number.isFinite(speedResult.nativeSpeedKmh)
-        ? Number(speedResult.nativeSpeedKmh.toFixed(1))
-        : null,
-      nativeSpeedMetersPerSecond: Number.isFinite(
-        speedResult.nativeSpeedMetersPerSecond
-      )
-        ? Number(speedResult.nativeSpeedMetersPerSecond.toFixed(2))
-        : null,
-      source: speedResult.source,
-      timestamp: currentPoint.timestamp,
-    });
-  }
+  const timestamp = currentPoint.timestamp;
+  const isMoving = processedSample.isMoving === true;
 
   setState({
-    lastGpsAt: currentPoint.timestamp,
-    recentSpeedSamplesKmh: speedResult.nextSpeedSamplesKmh,
+    lastGpsAt: timestamp,
+    motionDetectionState: createMotionDetectionState(
+      processedSample.nextMotionState
+    ),
+    recentSpeedSamplesKmh: processedSample.nextSpeedSamplesKmh,
   });
-
-  if (!state.lastParkingLocation) {
-    setState({ lastParkingLocation: currentPoint });
-  }
-
-  if (!state.lastGpsPoint) {
-    setState({
-      lastMeaningfulMovementAt: timestamp,
-      lastMeaningfulGpsPoint: currentPoint,
-    });
-  }
-
-  const isMoving = hasMeaningfulMovement(currentPoint);
 
   if (isMoving) {
     resetStoppedDuration();
     setState({ parkingCandidateStartedAt: null });
   } else if (state.activeTripId) {
-    const distanceFromLastMeaningfulPoint = state.lastMeaningfulGpsPoint
-      ? getDistanceMeters(state.lastMeaningfulGpsPoint, currentPoint)
-      : 0;
-
-    if (
-      !state.parkingCandidateStartedAt ||
-      distanceFromLastMeaningfulPoint > PARKING_RADIUS_METERS
-    ) {
+    if (!state.parkingCandidateStartedAt) {
       setState({ parkingCandidateStartedAt: timestamp });
-      beginStoppedDuration(timestamp);
-    } else {
-      beginStoppedDuration(timestamp);
     }
+    beginStoppedDuration(timestamp);
   }
 
   let nextMovementStatus = state.movementStatus;
@@ -963,14 +739,20 @@ async function handleLocationUpdate(location) {
   const stoppedMovementStatus = getStoppedMovementStatus(timestamp);
   const shouldStoreTripPoint =
     isMoving ||
-    (state.activeTripId && stoppedMovementStatus !== TRACKING_STATUS.PARKING);
+    (state.activeTripId &&
+      processedSample.shouldPersistPoint &&
+      stoppedMovementStatus !== TRACKING_STATUS.PARKING);
 
   if (shouldStoreTripPoint) {
     const trip = await ensureActiveTrip(currentPoint);
     savedPoint = await addLocationToTrip(
       trip,
       currentPoint,
-      state.lastGpsPoint
+      state.lastGpsPoint,
+      {
+        pointCount: state.activeTripPointCount,
+        speedSumKmh: state.activeTripSpeedSumKmh,
+      }
     );
     if (__DEV__) {
       console.log('[BG_SQLITE] point written', {
@@ -978,6 +760,7 @@ async function handleLocationUpdate(location) {
         tripId: trip.id,
       });
     }
+
     const activeTripMaxSpeedKmh = isMoving
       ? Math.max(
           state.activeTripMaxSpeedKmh,
@@ -1005,24 +788,16 @@ async function handleLocationUpdate(location) {
         maxSpeedKmh: activeTripMaxSpeedKmh,
       },
       activeTripMaxSpeedKmh,
-      todayDistanceKm,
-      todayDateKey: pointDateKey,
+      activeTripPointCount: savedPoint.accumulator.pointCount,
+      activeTripSpeedSumKmh: savedPoint.accumulator.speedSumKmh,
       lastMeaningfulMovementAt: isMoving
         ? timestamp
         : state.lastMeaningfulMovementAt,
-      lastMeaningfulGpsPoint: isMoving
-        ? currentPoint
-        : state.lastMeaningfulGpsPoint,
+      todayDateKey: pointDateKey,
+      todayDistanceKm,
     });
   } else if (stoppedMovementStatus === TRACKING_STATUS.PARKING) {
     nextMovementStatus = TRACKING_STATUS.PARKING;
-    setState({
-      activeTripMaxSpeedKmh: state.activeTripId
-        ? state.activeTripMaxSpeedKmh
-        : 0,
-      lastParkingLocation: currentPoint,
-    });
-
     if (state.activeTripId) {
       await completeActiveTrip(getParkingTripEndTime());
     }
@@ -1030,39 +805,24 @@ async function handleLocationUpdate(location) {
     nextMovementStatus = state.activeTripId
       ? stoppedMovementStatus
       : TRACKING_STATUS.PARKING;
-
-    if (!state.activeTripId) {
-      setState({ activeTripMaxSpeedKmh: 0 });
-    }
   }
 
   setState({
+    activeTripMaxSpeedKmh: state.activeTripId
+      ? state.activeTripMaxSpeedKmh
+      : 0,
     currentSpeedKmh: isMoving ? currentPoint.speedKmh : 0,
-    movementStatus: nextMovementStatus,
     lastGpsPoint: currentPoint,
+    movementStatus: nextMovementStatus,
   });
 
-  try {
-    const liveLocationPoint = {
+  await publishProcessedLocation(
+    {
       ...currentPoint,
       speedKmh: isMoving ? currentPoint.speedKmh : 0,
-    };
-
-    await publishLiveLocation(
-      liveLocationPoint,
-      nextMovementStatus,
-      state.activeTripId
-    );
-    if (__DEV__) {
-      console.log('[BG_SYNC] liveLocation publish attempted');
-    }
-    setState({ connectionStatus: CONNECTION_STATUS.ONLINE });
-  } catch (error) {
-    if (__DEV__) {
-      console.warn('[BG_SYNC] liveLocation publish failed', error);
-    }
-    setState({ connectionStatus: CONNECTION_STATUS.OFFLINE });
-  }
+    },
+    nextMovementStatus
+  );
 }
 
 async function processBackgroundLocation(location) {
@@ -1113,14 +873,24 @@ export async function initialize({ uid, deviceId }, reason = 'context ready') {
       isEnabled: false,
       movementStatus: TRACKING_STATUS.IDLE,
       connectionStatus: CONNECTION_STATUS.ONLINE,
+      activeTrip: null,
+      activeTripId: null,
+      activeTripMaxSpeedKmh: 0,
+      activeTripPointCount: 0,
+      activeTripSpeedSumKmh: 0,
+      currentSpeedKmh: 0,
+      lastGpsAt: null,
+      lastGpsPoint: null,
+      lastLivePublishAttemptAt: null,
+      lastLivePublishedAt: null,
+      lastMeaningfulMovementAt: null,
       todayDistanceKm: 0,
       todayDateKey: null,
       stoppedDurationMs: 0,
       stoppedSince: null,
-      pendingSpikePoints: [],
+      motionDetectionState: createMotionDetectionState(),
       recentSpeedSamplesKmh: [],
       parkingCandidateStartedAt: null,
-      lastMeaningfulGpsPoint: null,
       isCompletingTrip: false,
     });
     return getState();
@@ -1145,6 +915,8 @@ export async function initialize({ uid, deviceId }, reason = 'context ready') {
     connectionStatus: CONNECTION_STATUS.ONLINE,
     activeTripId: null,
     activeTrip: null,
+    activeTripPointCount: 0,
+    activeTripSpeedSumKmh: 0,
     startedAt: null,
     currentSpeedKmh: 0,
     activeTripMaxSpeedKmh: 0,
@@ -1153,12 +925,12 @@ export async function initialize({ uid, deviceId }, reason = 'context ready') {
     stoppedDurationMs: 0,
     stoppedSince: null,
     lastGpsPoint: null,
-    lastParkingLocation: null,
+    lastLivePublishAttemptAt: null,
+    lastLivePublishedAt: null,
     lastMeaningfulMovementAt: null,
     parkingCandidateStartedAt: null,
-    lastMeaningfulGpsPoint: null,
     lastGpsAt: null,
-    pendingSpikePoints: [],
+    motionDetectionState: createMotionDetectionState(),
     recentSpeedSamplesKmh: [],
     isCompletingTrip: false,
   });
@@ -1242,6 +1014,8 @@ export async function enableTracking(reason = 'auto tracking enabled') {
     setState({
       isEnabled: false,
       movementStatus: TRACKING_STATUS.GPS_LOST,
+      motionDetectionState: createMotionDetectionState(),
+      recentSpeedSamplesKmh: [],
       stoppedDurationMs: 0,
       stoppedSince: null,
     });
@@ -1283,16 +1057,19 @@ export async function disableTracking(reason = 'explicit user action') {
       connectionStatus: CONNECTION_STATUS.ONLINE,
       activeTripId: null,
       activeTrip: null,
+      activeTripPointCount: 0,
+      activeTripSpeedSumKmh: 0,
       startedAt: null,
       currentSpeedKmh: 0,
       activeTripMaxSpeedKmh: 0,
       stoppedDurationMs: 0,
       stoppedSince: null,
       lastGpsPoint: null,
+      lastLivePublishAttemptAt: null,
+      lastLivePublishedAt: null,
       lastMeaningfulMovementAt: null,
       parkingCandidateStartedAt: null,
-      lastMeaningfulGpsPoint: null,
-      pendingSpikePoints: [],
+      motionDetectionState: createMotionDetectionState(),
       recentSpeedSamplesKmh: [],
       isCompletingTrip: false,
     });
@@ -1315,17 +1092,19 @@ export async function shutdown(reason = 'provider unmounted') {
     connectionStatus: CONNECTION_STATUS.ONLINE,
     currentSpeedKmh: 0,
     activeTripMaxSpeedKmh: 0,
+    activeTripPointCount: 0,
+    activeTripSpeedSumKmh: 0,
     todayDistanceKm: 0,
     todayDateKey: null,
     stoppedDurationMs: 0,
     stoppedSince: null,
     lastGpsPoint: null,
-    lastParkingLocation: null,
+    lastLivePublishAttemptAt: null,
+    lastLivePublishedAt: null,
     lastMeaningfulMovementAt: null,
     parkingCandidateStartedAt: null,
-    lastMeaningfulGpsPoint: null,
     lastGpsAt: null,
-    pendingSpikePoints: [],
+    motionDetectionState: createMotionDetectionState(),
     recentSpeedSamplesKmh: [],
     isCompletingTrip: false,
   });

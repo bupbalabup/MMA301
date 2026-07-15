@@ -13,7 +13,10 @@ import {
 } from '../../database/repositories/gpsPointRepository';
 import { CLOUD_SYNC_STATUS } from '../../constants/history';
 import { getTodayDateKey } from '../../utils/date';
-import { normalizeLocationToGpsPoint } from '../../utils/geo';
+import {
+  calculateDistanceKm,
+  normalizeLocationToGpsPoint,
+} from '../../utils/geo';
 import { createId } from '../../utils/id';
 import { calculateTripStats } from './tripStatsService';
 
@@ -31,24 +34,48 @@ export async function createAutoTrip(location) {
   });
 }
 
-export async function addLocationToTrip(trip, location, previousPoint = null) {
+export async function addLocationToTrip(
+  trip,
+  location,
+  previousPoint = null,
+  accumulator = {}
+) {
   const point = normalizeLocationToGpsPoint(location, trip.id, previousPoint);
   const savedPoint = await addGpsPoint(point);
-  const points = await listGpsPointsByTrip(trip.id);
-  const stats = calculateTripStats(points);
-  const firstPoint = points[0] ?? savedPoint;
+  const previousPointCount = Math.max(0, accumulator.pointCount ?? 0);
+  const pointCount = previousPointCount + 1;
+  const previousSpeedSumKmh = Math.max(0, accumulator.speedSumKmh ?? 0);
+  const speedSumKmh = previousSpeedSumKmh + Math.max(0, savedPoint.speedKmh ?? 0);
+  const addedDistanceKm =
+    previousPointCount > 0 && previousPoint
+      ? calculateDistanceKm(previousPoint, savedPoint)
+      : 0;
+  const totalDistanceKm =
+    Math.max(0, Number(trip.totalDistanceKm) || 0) + addedDistanceKm;
+  const durationMs = Math.max(0, savedPoint.timestamp - trip.startTime);
+  const maxSpeedKmh = Math.max(
+    Number(trip.maxSpeedKmh) || 0,
+    Number(savedPoint.speedKmh) || 0
+  );
 
   const updatedTrip = await updateTrip(trip.id, {
-    ...stats,
+    avgSpeedKmh: pointCount > 0 ? speedSumKmh / pointCount : 0,
+    durationMs,
     endTime: savedPoint.timestamp,
-    startLatitude: trip.startLatitude ?? firstPoint.latitude,
-    startLongitude: trip.startLongitude ?? firstPoint.longitude,
+    maxSpeedKmh,
+    totalDistanceKm,
+    startLatitude: trip.startLatitude ?? savedPoint.latitude,
+    startLongitude: trip.startLongitude ?? savedPoint.longitude,
     endLatitude: savedPoint.latitude,
     endLongitude: savedPoint.longitude,
   });
 
   return {
     ...savedPoint,
+    accumulator: {
+      pointCount,
+      speedSumKmh,
+    },
     trip: updatedTrip,
   };
 }

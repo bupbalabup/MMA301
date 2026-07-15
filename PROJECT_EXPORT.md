@@ -211,7 +211,19 @@ SQLite là nguồn chính cho local History và local Playback. Firestore không
 
 ## 7. Tracking Engine
 
-`TrackingEngine` là lõi tracking. Nó nhận location từ `GpsEngine`, chuẩn hóa dữ liệu, kiểm tra hợp lệ, tính tốc độ, phát hiện chuyển động và quản lý vòng đời chuyến.
+`TrackingEngine` là lõi tracking và vẫn sở hữu vòng đời chuyến. Mọi callback foreground và TaskManager background gọi cùng `motionSampleProcessor`; processed sample duy nhất sau đó mới được dùng cho SQLite, Firestore, notification và UI.
+
+```mermaid
+flowchart LR
+  Raw[Raw Location] --> Quality[GPS Quality Filter]
+  Quality --> Speed[Canonical Speed Processor]
+  Speed --> Motion[Motion Detection Engine]
+  Motion --> Trip[Trip State Machine]
+  Trip --> SQLite
+  Trip --> Firestore
+  Trip --> Notification
+  Trip --> UI
+```
 
 ```mermaid
 stateDiagram-v2
@@ -231,11 +243,17 @@ Hằng số đáng chú ý:
 | Hằng số | Giá trị |
 | --- | --- |
 | GPS interval | 1000 ms |
+| Accuracy gate | 35 m |
+| Stationary radius | 18 m |
+| Stationary speed | dưới 2 km/h |
+| Trip-start distance | hơn 25 m |
+| Moving samples | 5 mẫu liên tiếp |
+| Confidence threshold | 70% |
+| Stationary heartbeat | 30 giây |
 | Paused threshold | 30 giây |
 | Parking threshold | 3 phút |
-| Single-point spike threshold | 500 km/h |
 | Fallback speed guard | 320 km/h |
-| Fallback acceleration guard | 45 km/h mỗi giây |
+| Acceleration guard | 45 km/h mỗi giây |
 | Speed median window | 3 mẫu |
 | GPS chunk size | 150 điểm |
 
@@ -251,7 +269,11 @@ Khi native speed thiếu, âm hoặc không hợp lệ, processor dùng fallback
 speedKmh = distanceKm / (elapsedTimeMs / 3600000)
 ```
 
-Khoảng cách fallback dùng Haversine từ hai tọa độ liên tiếp. Median ba mẫu giảm nhiễu một frame; fallback có tốc độ/gia tốc bất hợp lý hoặc lệch lớn so với native speed bị từ chối. Foreground và background gọi cùng processor nên UI, SQLite, Firestore và notification không có công thức riêng.
+Khoảng cách fallback dùng Haversine từ hai tọa độ liên tiếp. Khi native speed tồn tại, Haversine speed không được tính. Median ba mẫu giảm nhiễu; acceleration, coordinate jump và speed bất khả thi bị từ chối.
+
+`gpsQualityFilter` chấm 0–100 từ accuracy, speed availability, timestamp và heading. `motionDetectionEngine` giữ stationary center trong task state. Khi sample nằm trong bán kính 18 m với tốc độ dưới 2 km/h, tâm không dịch chuyển, distance không tăng và SQLite không nhận point mới. Heartbeat 30 giây publish lại stationary center để giữ trạng thái live mà không tạo chuyển động giả.
+
+Một sample tốc độ cao đơn lẻ không bắt đầu chuyến. Engine cần 5 sample liên tiếp, tốc độ lớn hơn 5 km/h, cách tâm hơn 25 m và confidence ít nhất 70%. Khi đã dừng, Paused 30 giây và Parking 3 phút vẫn là state machine cũ. Active-trip stats được cộng dồn O(1) sau mỗi insert; full point scan chỉ chạy khi chốt chuyến.
 
 ## 8. Fleet Map
 
@@ -513,12 +535,24 @@ Các điểm tối ưu hiện có:
 - Google Maps Android key được inject lúc build bằng `app.config.js` từ biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`; key thật không được commit. Dynamic config dừng sớm với lỗi rõ ràng nếu biến này thiếu, tránh tạo APK không có Maps manifest key.
 - Chưa có bộ screenshot runtime chính thức.
 - Long-running Android soak test trên nhiều OEM vẫn cần thực hiện.
-- Bộ xử lý tốc độ GNSS/Haversine mới chưa được runtime acceptance lại trên xe thật; tốc độ lịch sử ghi trước bản sửa có thể còn sai.
+- Motion Detection Engine đã qua deterministic simulation và Metro production bundle, nhưng chưa được runtime acceptance bằng desk test/xe thật; lịch sử cũ không được viết lại để loại drift.
 - Repository có draft `firestore.rules`, Privacy Policy, tài liệu xóa tài khoản và checklist APK Android. Rules chưa được Emulator-test/deploy; thông tin đơn vị vận hành, liên hệ và ngày hiệu lực của tài liệu privacy vẫn cần hoàn thiện trước khi phân phối rộng.
 - iOS location background pipeline chỉ có code/static configuration. Physical-device background acceptance, iOS distribution, Live Activity và Dynamic Island nằm ngoài phạm vi APK Android hiện tại và không phải release blocker.
 - Môi trường local hiện phải có `GOOGLE_MAPS_ANDROID_API_KEY` mới resolve được Expo config; manifest Android đã sinh trước đó không chứng minh key mới đã được inject.
 
 ### Runtime Acceptance Checklist
+
+| Kịch bản | Thời lượng/điều kiện | Kết quả cần xác nhận |
+| --- | --- | --- |
+| Điện thoại trên bàn | 10 phút | Không Moving, không trip, distance ổn định, SQLite không tăng theo callback |
+| Điện thoại trong xe đỗ | Tối thiểu 10 phút | Stationary center không trôi, notification giữ Đỗ xe |
+| Đi bộ | Ngoài trời, GPS tốt | Không bị spike; movement chỉ đổi sau confidence gate |
+| Di chuyển khoảng 20 km/h | Đối chiếu tốc độ tham chiếu | Tốc độ ổn định, không bỏ route hợp lệ |
+| Di chuyển khoảng 60 km/h | Đối chiếu tốc độ tham chiếu | Không clamp, không xuất hiện spike một frame |
+| GPS kém | Accuracy trên/dưới 35 m xen kẽ | Sample trên 35 m bị loại, không tạo quãng đường giả |
+| Offline | Tắt mạng, giữ GPS | Processed points tiếp tục ghi SQLite, notification dùng local state |
+| Background | App ở nền | Cùng motion processor, không duplicate trip/point |
+| Lock screen | Khóa màn hình khi di chuyển/dừng | Notification và SQLite phản ánh processed state mà không cần mở app |
 
 - Không có duplicate GPS points khi chuyển foreground/background.
 - Không có duplicate active trips khi TaskManager và foreground runtime cùng tồn tại.
@@ -530,13 +564,17 @@ Các điểm tối ưu hiện có:
 - Logout cleanup dừng task, notification và persisted tracking state.
 - Tracking disable cleanup dừng task và không ghi thêm GPS point.
 - Long-running battery/memory behavior cần soak test trên nhiều Android OEM.
+- Desk test 10 phút và xe đỗ không tạo movement/trip/distance giả.
+- Đi bộ, 20 km/h và 60 km/h chỉ bắt đầu chuyến sau confidence/consecutive-sample gate.
+- Poor-GPS samples trên 35 m không ghi SQLite hoặc publish movement.
+- Notification giữ ổn định khi stationary drift và tiếp tục dùng processed local state khi offline/background/lock screen.
 
 ## 20. Roadmap
 
 Các hướng phát triển hợp lý tiếp theo:
 
 - Soak test Android dài hạn cho duplicate points/trips/cloud chunks, pin và bộ nhớ.
-- Road-test bộ xử lý tốc độ GNSS/Haversine với đồng hồ xe và các điều kiện GPS khác nhau.
+- Runtime-test Motion Detection Engine bằng desk test, xe đỗ, đi bộ, 20/60 km/h, poor GPS, offline, background và lock screen.
 - Runtime-test preference notification đầy đủ/tối thiểu trên APK production.
 - Build, cài trực tiếp và chạy checklist acceptance cho EAS profile `production-apk`.
 - Backend bảo mật cho session và thiết bị.
@@ -597,7 +635,11 @@ File quan trọng:
 | `src/navigation/*` | AuthNavigator, AppNavigator, RootNavigator |
 | `src/contexts/*` | State toàn cục |
 | `src/services/tracking/TrackingEngine.js` | Lõi tracking |
+| `src/services/tracking/gpsQualityFilter.js` | Quality score và accuracy/timestamp gate |
+| `src/services/tracking/motionDetectionEngine.js` | Stationary center, confidence và consecutive-sample decision |
+| `src/services/tracking/motionSampleProcessor.js` | Điều phối processed sample dùng chung |
 | `src/services/tracking/speedProcessor.js` | Chuẩn hóa GNSS speed, Haversine fallback và lọc spike |
+| `scripts/validate_motion_detection.cjs` | Mô phỏng drift, poor accuracy, timestamp, spike và trip-start gate |
 | `src/services/location/GpsEngine.js` | Adapter Expo Location |
 | `src/services/location/locationTaskService.js` | TaskManager task |
 | `src/services/firebase/*` | Firebase Auth và Firestore |

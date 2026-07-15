@@ -28,27 +28,40 @@ function getMotionConfidence({
   qualityScore,
   speedKmh,
 }) {
-  const qualityContribution = Math.min(35, qualityScore * 0.35);
+  const qualityContribution = Math.min(
+    MOTION_DETECTION_CONFIG.maxConfidenceQualityContribution,
+    qualityScore *
+      (MOTION_DETECTION_CONFIG.maxConfidenceQualityContribution / 100)
+  );
   const speedContribution = Math.min(
-    25,
-    Math.max(0, ((speedKmh - MOTION_DETECTION_CONFIG.stationarySpeedKmh) / 18) * 25)
+    MOTION_DETECTION_CONFIG.maxConfidenceSpeedContribution,
+    Math.max(
+      0,
+      ((speedKmh - MOTION_DETECTION_CONFIG.stationarySpeedKmh) /
+        MOTION_DETECTION_CONFIG.speedConfidenceRangeKmh) *
+        MOTION_DETECTION_CONFIG.maxConfidenceSpeedContribution
+    )
   );
   const distanceContribution = Math.min(
-    20,
+    MOTION_DETECTION_CONFIG.maxConfidenceDistanceContribution,
     (distanceFromStationaryCenter /
       MOTION_DETECTION_CONFIG.movementDistanceMeters) *
-      20
+      MOTION_DETECTION_CONFIG.maxConfidenceDistanceContribution
   );
   const consecutiveContribution = Math.min(
-    15,
-    (candidateCount / MOTION_DETECTION_CONFIG.requiredMovingSamples) * 15
+    MOTION_DETECTION_CONFIG.maxConfidenceConsecutiveContribution,
+    (candidateCount / MOTION_DETECTION_CONFIG.requiredMovingSamples) *
+      MOTION_DETECTION_CONFIG.maxConfidenceConsecutiveContribution
   );
-  const durationContribution = Math.min(5, candidateDurationMs / 1000);
+  const durationContribution = Math.min(
+    MOTION_DETECTION_CONFIG.maxConfidenceDurationContribution,
+    candidateDurationMs / 1000
+  );
   const headingMultiplier =
     headingDelta == null ||
     headingDelta <= MOTION_DETECTION_CONFIG.headingConsistencyDegrees
       ? 1
-      : 0.8;
+      : MOTION_DETECTION_CONFIG.inconsistentHeadingConfidenceMultiplier;
 
   return Math.round(
     Math.min(
@@ -113,10 +126,14 @@ function isCoordinateJumpImplausible({
   const expectedDistanceMeters =
     (nativeSpeedKmh / 3.6) * elapsedSeconds;
   const accuracyAllowance =
-    Math.max(0, Number(currentPoint.accuracy) || 0) * 2;
+    Math.max(0, Number(currentPoint.accuracy) || 0) *
+    MOTION_DETECTION_CONFIG.coordinateAccuracyMultiplier;
   const allowedDistanceMeters = Math.max(
-    100,
-    expectedDistanceMeters * 3 + accuracyAllowance + 25
+    MOTION_DETECTION_CONFIG.coordinateJumpMinimumMeters,
+    expectedDistanceMeters *
+      MOTION_DETECTION_CONFIG.coordinateDistanceMultiplier +
+      accuracyAllowance +
+      MOTION_DETECTION_CONFIG.coordinateJumpPaddingMeters
   );
 
   return distanceMeters > allowedDistanceMeters;
@@ -144,8 +161,11 @@ export function evaluateMotionSample({
   const referenceHeading =
     state.candidateLastPoint?.heading ?? state.lastAcceptedHeading;
   const headingDelta = getHeadingDelta(referenceHeading, currentPoint.heading);
+  const motionSpeedKmh = Number.isFinite(nativeSpeedKmh)
+    ? nativeSpeedKmh
+    : speedKmh;
   const isStationarySpeed =
-    speedKmh < MOTION_DETECTION_CONFIG.stationarySpeedKmh;
+    motionSpeedKmh < MOTION_DETECTION_CONFIG.stationarySpeedKmh;
 
   if (!previousAcceptedPoint && !state.stationaryCenter) {
     return {
@@ -245,7 +265,7 @@ export function evaluateMotionSample({
   }
 
   if (state.mode === 'moving') {
-    if (speedKmh > MOTION_DETECTION_CONFIG.movementSpeedKmh) {
+    if (motionSpeedKmh > MOTION_DETECTION_CONFIG.movementSpeedKmh) {
       return {
         accepted: true,
         distanceFromPreviousPoint,
@@ -280,6 +300,7 @@ export function evaluateMotionSample({
         stationaryCenter: currentPoint,
       }),
       shouldPersistPoint:
+        motionSpeedKmh >= MOTION_DETECTION_CONFIG.stationarySpeedKmh &&
         distanceFromPreviousPoint >=
         MOTION_DETECTION_CONFIG.minDistanceIncrementMeters,
       shouldPublishHeartbeat: false,
@@ -287,12 +308,16 @@ export function evaluateMotionSample({
   }
 
   const hasMovingSpeed =
-    speedKmh > MOTION_DETECTION_CONFIG.movementSpeedKmh;
+    motionSpeedKmh > MOTION_DETECTION_CONFIG.movementSpeedKmh;
   if (!hasMovingSpeed) {
+    const isInsideStationaryRadius =
+      distanceFromStationaryCenter <=
+      MOTION_DETECTION_CONFIG.stationaryRadiusMeters;
     const shouldPublishHeartbeat =
-      !state.lastStationaryHeartbeatAt ||
-      timestamp - state.lastStationaryHeartbeatAt >=
-        MOTION_DETECTION_CONFIG.stationaryHeartbeatMs;
+      isInsideStationaryRadius &&
+      (!state.lastStationaryHeartbeatAt ||
+        timestamp - state.lastStationaryHeartbeatAt >=
+          MOTION_DETECTION_CONFIG.stationaryHeartbeatMs);
 
     return {
       accepted: false,
@@ -307,8 +332,9 @@ export function evaluateMotionSample({
         stationaryCenter,
       }),
       reason: 'confidence_low',
-      shouldAdvanceStationaryState: true,
+      shouldAdvanceStationaryState: isInsideStationaryRadius,
       shouldPublishHeartbeat,
+      shouldResetStationaryTimer: !isInsideStationaryRadius,
     };
   }
 
@@ -325,7 +351,7 @@ export function evaluateMotionSample({
     distanceFromStationaryCenter,
     headingDelta,
     qualityScore,
-    speedKmh,
+    speedKmh: motionSpeedKmh,
   });
   const hasEnoughSamples =
     movementCandidateCount >=

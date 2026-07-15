@@ -40,7 +40,9 @@ iOS chỉ được duy trì ở mức tương thích tĩnh và foreground behavi
 - Theo dõi GPS foreground bằng `expo-location`.
 - Ưu tiên vận tốc GNSS `coords.speed`, đổi từ m/s sang km/h đúng một lần; dùng Haversine theo tọa độ/timestamp khi provider không trả vận tốc hợp lệ.
 - Làm mượt tốc độ bằng median cửa sổ ngắn và từ chối fallback/spike bất hợp lý.
-- Lọc điểm GPS bất thường.
+- GPS quality score, accuracy gate 35 m và Motion Detection Engine dùng stationary center để loại drift.
+- Chỉ xác nhận Moving sau 5 sample liên tiếp, khoảng cách hơn 25 m và confidence tối thiểu 70%.
+- Khi đứng yên, không ghi điểm drift vào SQLite; heartbeat live dùng stationary center theo chu kỳ.
 - Phân biệt trạng thái di chuyển, tạm dừng, đỗ xe và mất GPS.
 - Tạo chuyến tự động khi có chuyển động.
 - Hoàn tất chuyến tự động khi đủ thời gian đỗ xe.
@@ -69,7 +71,7 @@ iOS chỉ được duy trì ở mức tương thích tĩnh và foreground behavi
 
 ### Đang Hoàn Thiện
 
-- Bộ xử lý tốc độ GNSS/Haversine đã hoàn thành code và static audit nhưng chưa được đối chiếu với đồng hồ xe ở các dải đứng yên, đi bộ, 20–30 km/h, 60–70 km/h, GPS kém, background, lock screen và offline.
+- Motion Detection Engine đã hoàn thành code, deterministic simulation và Metro bundle audit nhưng chưa được desk/road/background acceptance trên Android thật.
 - Chế độ nội dung đầy đủ/tối thiểu của “Thông báo trực tiếp” cần runtime acceptance lại trên APK production.
 - Hành vi dài hạn trên nhiều Android OEM, mức tiêu thụ pin/bộ nhớ, swipe-away, Auto Start và tối ưu pin vẫn cần kiểm thử bổ sung.
 - Kick thiết bị và đăng xuất tất cả thiết bị đang ở mức client-mediated qua Firestore. Dự án chưa có backend Admin SDK để thu hồi Firebase refresh token toàn cục.
@@ -318,7 +320,7 @@ Android runtime đã được xác nhận cho các luồng chính: tracking ch�
 - Logout dừng task, dừng notification và không để orphan tracking state.
 - Disable tracking dừng task, dọn persisted task state và không ghi thêm point.
 - Long-running battery/memory behavior cần soak test trên nhiều thiết bị Android/OEM.
-- So sánh tốc độ với đồng hồ xe trên Android thật sau bản sửa GNSS/fallback; kiểm tra tăng tốc, dừng và GPS nhiễu đô thị.
+- Chạy desk test 10 phút, xe đỗ, đi bộ và road test 20–30/60–70 km/h; đối chiếu tốc độ với đồng hồ xe và kiểm tra GPS nhiễu, offline, background, lock screen.
 - Force-stop dừng background execution cho đến khi người dùng mở lại app.
 - Swipe-away behavior có thể khác nhau theo Android vendor.
 - iOS background runtime nằm ngoài acceptance hiện tại; static compatibility không được dùng làm bằng chứng runtime.

@@ -17,18 +17,18 @@ function isHeadingValid(heading) {
 
 function getAccuracyScore(accuracy) {
   if (!Number.isFinite(accuracy) || accuracy < 0) {
-    return 20;
+    return MOTION_DETECTION_CONFIG.unknownAccuracyQualityScore;
   }
 
-  if (accuracy <= 10) {
-    return 55;
+  if (accuracy <= MOTION_DETECTION_CONFIG.excellentAccuracyMeters) {
+    return MOTION_DETECTION_CONFIG.excellentAccuracyQualityScore;
   }
 
-  if (accuracy <= 20) {
-    return 45;
+  if (accuracy <= MOTION_DETECTION_CONFIG.goodAccuracyMeters) {
+    return MOTION_DETECTION_CONFIG.goodAccuracyQualityScore;
   }
 
-  return 35;
+  return MOTION_DETECTION_CONFIG.acceptableAccuracyQualityScore;
 }
 
 export function evaluateGpsQuality(point, location, now = Date.now()) {
@@ -60,9 +60,13 @@ export function evaluateGpsQuality(point, location, now = Date.now()) {
   const qualityScore = Math.min(
     100,
     getAccuracyScore(accuracy) +
-      (hasNativeSpeed ? 25 : 10) +
-      15 +
-      (isHeadingValid(heading) ? 5 : 0)
+      (hasNativeSpeed
+        ? MOTION_DETECTION_CONFIG.nativeSpeedQualityScore
+        : MOTION_DETECTION_CONFIG.fallbackSpeedQualityScore) +
+      MOTION_DETECTION_CONFIG.timestampQualityScore +
+      (isHeadingValid(heading)
+        ? MOTION_DETECTION_CONFIG.headingQualityScore
+        : 0)
   );
 
   return {

@@ -79,6 +79,19 @@ export function resolveLocationSpeed({
   const nativeSpeedMetersPerSecond = getNativeSpeedMetersPerSecond(location);
   const nativeSpeedKmh = getNativeSpeedKmh(nativeSpeedMetersPerSecond);
 
+  if (nativeSpeedMetersPerSecond != null && nativeSpeedKmh == null) {
+    return {
+      accepted: false,
+      coordinateSpeedKmh: null,
+      elapsedTimeMs: previousPoint
+        ? currentPoint.timestamp - previousPoint.timestamp
+        : null,
+      nativeSpeedKmh,
+      nativeSpeedMetersPerSecond,
+      reason: 'speed_spike',
+    };
+  }
+
   if (!previousPoint) {
     const initialSpeedKmh = nativeSpeedKmh ?? 0;
 

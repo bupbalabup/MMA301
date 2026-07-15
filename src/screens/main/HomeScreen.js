@@ -205,6 +205,31 @@ export default function HomeScreen({ navigation }) {
           title="Track Device"
           subtitle={user?.email ?? ''}
         />
+
+        <Text style={styles.sectionLabel}>THIẾT BỊ ĐANG XEM</Text>
+        <View style={styles.deviceSelectorWrap}>
+          {deviceLoading ? (
+            <Text style={styles.mutedText}>Đang tải thiết bị...</Text>
+          ) : devices.length === 0 ? (
+            <Text style={styles.mutedText}>Chưa có thiết bị trong tài khoản</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.deviceChips}>
+              {devices.map((device) => {
+                const deviceId = device.deviceId ?? device.id;
+                return (
+                  <DeviceChip
+                    key={deviceId}
+                    name={getDeviceName(device)}
+                    isLocal={deviceId === localDeviceId}
+                    isSelected={deviceId === selectedDeviceId}
+                    onPress={() => selectDevice(deviceId)}
+                  />
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+
         <HeroCard
           deviceName={selectedDeviceName}
           isLocal={isViewingLocalDevice}
@@ -282,30 +307,6 @@ export default function HomeScreen({ navigation }) {
             <TrackIcon name="liveMap" size={20} />
             <Text style={styles.mapActionText}>Xem bản đồ thiết bị</Text>
           </Pressable>
-        </View>
-
-        <Text style={styles.sectionLabel}>THIẾT BỊ ĐANG XEM</Text>
-        <View style={styles.deviceSelectorWrap}>
-          {deviceLoading ? (
-            <Text style={styles.mutedText}>Đang tải thiết bị...</Text>
-          ) : devices.length === 0 ? (
-            <Text style={styles.mutedText}>Chưa có thiết bị trong tài khoản</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.deviceChips}>
-              {devices.map((device) => {
-                const deviceId = device.deviceId ?? device.id;
-                return (
-                  <DeviceChip
-                    key={deviceId}
-                    name={getDeviceName(device)}
-                    isLocal={deviceId === localDeviceId}
-                    isSelected={deviceId === selectedDeviceId}
-                    onPress={() => selectDevice(deviceId)}
-                  />
-                );
-              })}
-            </ScrollView>
-          )}
         </View>
 
         <Text style={styles.sectionLabel}>THÔNG SỐ</Text>
