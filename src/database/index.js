@@ -1,4 +1,4 @@
-export { getDatabase, initDatabase } from './database';
+export { clearTrackingData, getDatabase, initDatabase } from './database';
 export {
   createTrip,
   deleteTrip,

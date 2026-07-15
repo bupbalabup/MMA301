@@ -69,7 +69,7 @@ export default function SyncStatusScreen() {
 
   async function clearCache() {
     if (!user?.uid) {
-      setError('Chưa có tài khoản để xóa cache.');
+      setError('Chưa có tài khoản để xóa dữ liệu tạm.');
       return;
     }
 
@@ -77,9 +77,9 @@ export default function SyncStatusScreen() {
     setMessage('');
     try {
       await clearDisplayCache(user.uid);
-      setMessage('Đã xóa cache hiển thị trên thiết bị này.');
+      setMessage('Đã xóa dữ liệu hiển thị tạm trên thiết bị này.');
     } catch (cacheError) {
-      setError(cacheError.message ?? 'Không thể xóa cache.');
+      setError(cacheError.message ?? 'Không thể xóa dữ liệu tạm.');
     }
   }
 
@@ -89,7 +89,6 @@ export default function SyncStatusScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.md }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Đồng bộ</Text>
         <SurfaceCard style={styles.card}>
           <InfoRow
             label="Lần đồng bộ cuối"
@@ -98,7 +97,7 @@ export default function SyncStatusScreen() {
           <InfoRow label="Số chuyến chờ đồng bộ" value={String(status?.pendingTripCount ?? 0)} />
           <InfoRow label="Dữ liệu trên thiết bị" value={status?.sqliteStatus ?? 'Đang kiểm tra'} />
           <InfoRow label="Đám mây" value={isOnline ? 'Sẵn sàng' : 'Mất kết nối'} />
-          <InfoRow label="Cache" value={status?.cacheStatus ?? 'Đang kiểm tra'} last />
+          <InfoRow label="Dữ liệu hiển thị tạm" value={status?.cacheStatus ?? 'Đang kiểm tra'} last />
           <View style={styles.buttonGroup}>
             <PrimaryButton
               disabled={loading || syncing}
@@ -112,7 +111,7 @@ export default function SyncStatusScreen() {
               loading={loading}
               onPress={loadStatus}
             />
-            <SecondaryButton label="Xóa cache" onPress={clearCache} />
+            <SecondaryButton label="Xóa dữ liệu tạm" onPress={clearCache} />
           </View>
         </SurfaceCard>
         {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -146,9 +145,5 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  title: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
 });

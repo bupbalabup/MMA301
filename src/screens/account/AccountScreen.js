@@ -1,4 +1,4 @@
-import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text } from 'react-native';
 import { useState } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,10 +19,33 @@ import { colors, spacing, typography } from '../../theme';
 export default function AccountScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { confirmPassword, logout, user } = useAuth();
-  const { localDeviceId, localDeviceName, selectedDevice } = useDevice();
+  const { localDeviceId, localDeviceName } = useDevice();
   const [confirmAllVisible, setConfirmAllVisible] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmError, setConfirmError] = useState('');
+
+  async function performLogoutAll() {
+    if (!user?.uid || confirmLoading) {
+      return;
+    }
+
+    setConfirmLoading(true);
+    try {
+      await revokeAllDeviceSessions(user.uid, 'logout_all');
+      await logSecurityEvent(user.uid, {
+        action: SECURITY_ACTIONS.LOGOUT_ALL,
+        deviceId: localDeviceId,
+        deviceName: localDeviceName,
+        platform: Platform.OS,
+      });
+      await logout();
+    } catch (error) {
+      setConfirmError(error.message ?? 'Không thể đăng xuất tất cả thiết bị.');
+      setConfirmAllVisible(true);
+    } finally {
+      setConfirmLoading(false);
+    }
+  }
 
   async function confirmLogoutAll(password) {
     if (!user?.uid) return;
@@ -43,18 +66,10 @@ export default function AccountScreen({ navigation }) {
           {
             text: 'Đăng xuất tất cả',
             style: 'destructive',
-            onPress: async () => {
-              await revokeAllDeviceSessions(user.uid, 'logout_all');
-              await logSecurityEvent(user.uid, {
-                action: SECURITY_ACTIONS.LOGOUT_ALL,
-                deviceId: localDeviceId,
-                deviceName: localDeviceName,
-                platform: selectedDevice?.platform,
-              });
-              await logout();
-            },
+            onPress: performLogoutAll,
           },
-        ]
+        ],
+        { cancelable: false }
       );
     } catch (error) {
       setConfirmError(error.message ?? 'Không thể xác nhận mật khẩu.');
@@ -68,7 +83,6 @@ export default function AccountScreen({ navigation }) {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.md }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Tài khoản và thiết bị</Text>
         <Text style={styles.description}>
           Quản lý bảo mật, phiên đăng nhập và thiết bị theo dõi trong tài khoản.
         </Text>
@@ -110,7 +124,7 @@ export default function AccountScreen({ navigation }) {
             destructive
             icon="close"
             title="Đăng xuất tất cả thiết bị"
-            subtitle="Yêu cầu nhập mật khẩu trước khi thực hiện"
+            subtitle="Đánh dấu đăng xuất các phiên trong Track Device"
             onPress={() => {
               setConfirmError('');
               setConfirmAllVisible(true);
@@ -131,6 +145,16 @@ export default function AccountScreen({ navigation }) {
             title="Xóa thiết bị"
             subtitle="Chọn thiết bị cần xóa khỏi tài khoản"
             onPress={() => navigation.navigate(MainRoutes.SelectDeviceToDelete)}
+          />
+        </Section>
+
+        <Section title="TÀI KHOẢN">
+          <SettingsListItem
+            destructive
+            icon="close"
+            title="Xóa tài khoản"
+            subtitle="Xóa tài khoản và toàn bộ dữ liệu Track Device"
+            onPress={() => navigation.navigate(MainRoutes.DeleteAccount)}
           />
         </Section>
       </ScrollView>
@@ -192,9 +216,5 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.textMuted,
     marginTop: spacing.xl,
-  },
-  title: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
 });

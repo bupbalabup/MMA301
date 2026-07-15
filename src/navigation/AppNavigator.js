@@ -6,6 +6,7 @@ import { colors, spacing, typography } from '../theme';
 import { TrackIcon } from '../components/icons';
 import AccountScreen from '../screens/account/AccountScreen';
 import ChangePasswordScreen from '../screens/account/ChangePasswordScreen';
+import DeleteAccountScreen from '../screens/account/DeleteAccountScreen';
 import MyDevicesScreen from '../screens/account/MyDevicesScreen';
 import NotificationPreferencesScreen from '../screens/account/NotificationPreferencesScreen';
 import SelectDeviceToDeleteScreen from '../screens/account/SelectDeviceToDeleteScreen';
@@ -87,6 +88,11 @@ export default function AppNavigator() {
         name={MainRoutes.ChangePassword}
         component={ChangePasswordScreen}
         options={{ title: 'Đổi mật khẩu' }}
+      />
+      <Stack.Screen
+        name={MainRoutes.DeleteAccount}
+        component={DeleteAccountScreen}
+        options={{ title: 'Xóa tài khoản' }}
       />
       <Stack.Screen
         name={MainRoutes.SignedInDevices}

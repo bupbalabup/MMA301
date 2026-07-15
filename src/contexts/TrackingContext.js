@@ -14,6 +14,7 @@ import {
   enableTracking as enableTrackingEngine,
   getState,
   initialize,
+  loadLiveTrackingNotificationPreference,
   shutdown,
   syncPendingTrips,
   subscribeToState,
@@ -23,6 +24,12 @@ import { useConnectivity } from './ConnectivityContext';
 import { useDevice } from './DeviceContext';
 
 const TrackingContext = createContext(null);
+
+function logTrackingLifecycle(message) {
+  if (__DEV__) {
+    console.log(`[TrackingContext] ${message}`);
+  }
+}
 
 export function TrackingProvider({ children }) {
   const { loading: authLoading, user } = useAuth();
@@ -38,6 +45,26 @@ export function TrackingProvider({ children }) {
   const previousOnlineRef = useRef(isOnline);
 
   useEffect(() => {
+    let isCurrent = true;
+
+    loadLiveTrackingNotificationPreference()
+      .then((richContentEnabled) => {
+        if (isCurrent) {
+          configureTrackingNotification({ richContentEnabled });
+        }
+      })
+      .catch((error) => {
+        if (__DEV__) {
+          console.warn('Failed to load live notification preference.', error);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = subscribeToState((nextState) => {
       setTrackingState(nextState);
     });
@@ -49,8 +76,8 @@ export function TrackingProvider({ children }) {
 
   useEffect(() => {
     return () => {
-      console.log(
-        '[TrackingContext] cleanup reason: provider unmounted (React unmount or Fast Refresh)'
+      logTrackingLifecycle(
+        'cleanup reason: provider unmounted (React unmount or Fast Refresh)'
       );
       shutdown('provider unmounted (React unmount or Fast Refresh)').catch((error) => {
         console.warn('Failed to shutdown tracking.', error);
@@ -71,7 +98,7 @@ export function TrackingProvider({ children }) {
         const currentState = getState();
 
         if (currentState.isInitialized || currentState.isEnabled) {
-          console.log('[TrackingContext] cleanup reason: user logged out');
+          logTrackingLifecycle('cleanup reason: user logged out');
           await shutdown('user logged out');
         }
 
@@ -100,7 +127,7 @@ export function TrackingProvider({ children }) {
                 ? 'local device changed'
                 : 'tracking context changed';
 
-          console.log(`[TrackingContext] cleanup reason: ${cleanupReason}`);
+          logTrackingLifecycle(`cleanup reason: ${cleanupReason}`);
           await shutdown(cleanupReason);
 
           if (isCancelled) {
@@ -108,7 +135,7 @@ export function TrackingProvider({ children }) {
           }
         }
 
-        console.log(`[TrackingContext] initialize reason: context ${contextKey}`);
+        logTrackingLifecycle('initialize reason: authenticated device context ready');
         await initialize({
           uid,
           deviceId: localDeviceId,
@@ -179,7 +206,7 @@ export function TrackingProvider({ children }) {
   const enableTracking = useCallback(async () => {
     try {
       if (uid && localDeviceId) {
-        console.log(`[TrackingContext] initialize reason: manual enable ${uid}:${localDeviceId}`);
+        logTrackingLifecycle('initialize reason: manual enable');
         await initialize({
           uid,
           deviceId: localDeviceId,

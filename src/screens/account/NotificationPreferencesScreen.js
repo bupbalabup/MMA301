@@ -1,34 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton, SurfaceCard } from '../../components/ui';
-import { useAuth } from '../../contexts';
-import { getUserProfile, updateUserProfile } from '../../services/firebase/userService';
+import {
+  configureTrackingNotification,
+  loadLiveTrackingNotificationPreference,
+  saveLiveTrackingNotificationPreference,
+} from '../../services/tracking';
 import { colors, spacing, typography } from '../../theme';
-
-const DEFAULT_PREFERENCES = {
-  appUpdate: true,
-  deviceOffline: true,
-  deviceOnline: true,
-  deviceMoving: true,
-  deviceStopped: true,
-  syncComplete: true,
-};
-
-const OPTIONS = [
-  ['deviceOnline', 'Thiết bị trực tuyến'],
-  ['deviceOffline', 'Thiết bị mất kết nối'],
-  ['deviceMoving', 'Thiết bị bắt đầu di chuyển'],
-  ['deviceStopped', 'Thiết bị dừng'],
-  ['syncComplete', 'Đồng bộ hoàn tất'],
-  ['appUpdate', 'Có bản cập nhật ứng dụng'],
-];
 
 export default function NotificationPreferencesScreen() {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+  const [richContentEnabled, setRichContentEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -37,15 +21,11 @@ export default function NotificationPreferencesScreen() {
   useEffect(() => {
     let mounted = true;
     async function loadPreferences() {
-      if (!user?.uid) return;
       setLoading(true);
       try {
-        const profile = await getUserProfile(user.uid);
+        const enabled = await loadLiveTrackingNotificationPreference();
         if (mounted) {
-          setPreferences({
-            ...DEFAULT_PREFERENCES,
-            ...(profile?.notificationPreferences ?? {}),
-          });
+          setRichContentEnabled(enabled);
         }
       } catch (loadError) {
         if (mounted) setError(loadError.message ?? 'Không thể tải tùy chọn thông báo.');
@@ -58,25 +38,18 @@ export default function NotificationPreferencesScreen() {
     return () => {
       mounted = false;
     };
-  }, [user?.uid]);
-
-  function togglePreference(key) {
-    setPreferences((current) => ({
-      ...current,
-      [key]: !current[key],
-    }));
-    setMessage('');
-  }
+  }, []);
 
   async function savePreferences() {
-    if (!user?.uid) return;
-
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await updateUserProfile(user.uid, { notificationPreferences: preferences });
-      setMessage('Đã lưu tùy chọn thông báo.');
+      const enabled = await saveLiveTrackingNotificationPreference(
+        richContentEnabled
+      );
+      configureTrackingNotification({ richContentEnabled: enabled });
+      setMessage('Đã lưu tùy chọn thông báo trực tiếp.');
     } catch (saveError) {
       setError(saveError.message ?? 'Không thể lưu tùy chọn thông báo.');
     } finally {
@@ -90,24 +63,34 @@ export default function NotificationPreferencesScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.md }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Thông báo</Text>
         <Text style={styles.description}>
-          Các tùy chọn này không ảnh hưởng thông báo theo dõi cố định của Android.
+          Tùy chọn này chỉ thay đổi lượng thông tin hiển thị. Khi theo dõi đang
+          hoạt động, Android vẫn luôn hiển thị thông báo tối thiểu bắt buộc cho
+          dịch vụ vị trí nền.
         </Text>
         <SurfaceCard style={styles.card}>
-          {OPTIONS.map(([key, label]) => (
-            <Pressable
-              accessibilityRole="button"
-              key={key}
-              onPress={() => togglePreference(key)}
-              style={styles.row}
-            >
-              <Text style={styles.rowLabel}>{label}</Text>
-              <Text style={[styles.rowValue, preferences[key] ? styles.enabled : styles.disabled]}>
-                {preferences[key] ? 'Bật' : 'Tắt'}
+          <View style={styles.row}>
+            <View style={styles.rowCopy}>
+              <Text style={styles.rowLabel}>Thông báo trực tiếp</Text>
+              <Text style={styles.rowDescription}>
+                Hiển thị tốc độ, trạng thái, quãng đường và thời gian chuyến đi.
               </Text>
-            </Pressable>
-          ))}
+            </View>
+            <Switch
+              accessibilityLabel="Thông báo trực tiếp"
+              accessibilityRole="switch"
+              accessibilityState={{ checked: richContentEnabled }}
+              disabled={loading || saving}
+              onValueChange={(enabled) => {
+                setRichContentEnabled(enabled);
+                setMessage('');
+                setError('');
+              }}
+              trackColor={{ false: colors.border, true: colors.primarySoft }}
+              thumbColor={richContentEnabled ? colors.primary : colors.textMuted}
+              value={richContentEnabled}
+            />
+          </View>
           <PrimaryButton
             disabled={loading || saving}
             label={saving ? 'Đang lưu...' : 'Lưu tùy chọn'}
@@ -139,12 +122,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginTop: spacing.xs,
   },
-  disabled: {
-    color: colors.textMuted,
-  },
-  enabled: {
-    color: colors.success,
-  },
   error: {
     ...typography.caption,
     color: colors.danger,
@@ -164,21 +141,23 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingVertical: spacing.sm,
   },
-  rowLabel: {
-    ...typography.body,
-    color: colors.textPrimary,
+  rowCopy: {
     flex: 1,
     paddingRight: spacing.md,
   },
-  rowValue: {
-    ...typography.button,
+  rowDescription: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginTop: spacing.xs,
+  },
+  rowLabel: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontWeight: '700',
   },
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  title: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
 });

@@ -35,23 +35,64 @@ function getMovementLabel(movementStatus) {
   return movementLabels[movementStatus] ?? movementLabels[TRACKING_STATUS.IDLE];
 }
 
+function formatDistance(distanceKm) {
+  const normalizedDistanceKm = Math.max(0, Number(distanceKm) || 0);
+  return `${normalizedDistanceKm.toFixed(1).replace('.', ',')} km`;
+}
+
+function formatElapsedTime(startedAt, currentTimestamp) {
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor(((currentTimestamp ?? Date.now()) - (startedAt ?? 0)) / 1000)
+  );
+  const hours = Math.floor(elapsedSeconds / 3600);
+  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+  const seconds = elapsedSeconds % 60;
+
+  return [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':');
+}
+
 export function buildLiveTrackingNotificationContent({
   connectionStatus,
+  currentTimestamp,
   deviceName,
+  hasActiveTrip = false,
   movementStatus,
+  richContentEnabled = true,
   speedKmh,
+  tripDistanceKm,
+  tripStartedAt,
 }) {
+  if (!richContentEnabled) {
+    const title = LIVE_TRACKING_NOTIFICATION.TITLE_PREFIX;
+    const body = 'Theo dõi vị trí đang hoạt động';
+
+    return {
+      body,
+      key: `minimal|${title}|${body}`,
+      title,
+    };
+  }
+
   const roundedSpeed = Math.max(0, Math.round(Number(speedKmh) || 0));
   const isOffline = connectionStatus === CONNECTION_STATUS.OFFLINE;
-  const title = `${LIVE_TRACKING_NOTIFICATION.TITLE_PREFIX} - ${getSafeDeviceName(deviceName)}`;
-  const speedText = isOffline
+  const isGpsLost = movementStatus === TRACKING_STATUS.GPS_LOST;
+  const title = `${LIVE_TRACKING_NOTIFICATION.TITLE_PREFIX} · ${getSafeDeviceName(deviceName)}`;
+  const speedText = isOffline || isGpsLost
     ? `Tốc độ gần nhất ${roundedSpeed} km/h`
     : `${roundedSpeed} km/h`;
-  const body = [
-    speedText,
-    getConnectionLabel(connectionStatus),
-    getMovementLabel(movementStatus),
-  ].join(' | ');
+  const primaryLine = [speedText, getMovementLabel(movementStatus)].join(' · ');
+  const statusText = isOffline ? 'Đang lưu ngoại tuyến' : getConnectionLabel(connectionStatus);
+  const secondaryLine = hasActiveTrip
+    ? [
+        formatDistance(tripDistanceKm),
+        formatElapsedTime(tripStartedAt, currentTimestamp),
+        statusText,
+      ].join(' · ')
+    : statusText;
+  const body = `${primaryLine}\n${secondaryLine}`;
 
   return {
     body,
@@ -83,10 +124,15 @@ export function rememberVisibleLiveTrackingNotification(content) {
 
 export async function updateLiveTrackingForegroundNotification({
   connectionStatus,
+  currentTimestamp,
   deviceName,
   force = false,
+  hasActiveTrip,
   movementStatus,
+  richContentEnabled,
   speedKmh,
+  tripDistanceKm,
+  tripStartedAt,
 }) {
   if (Platform.OS !== 'android') {
     return false;
@@ -94,9 +140,14 @@ export async function updateLiveTrackingForegroundNotification({
 
   const content = buildLiveTrackingNotificationContent({
     connectionStatus,
+    currentTimestamp,
     deviceName,
+    hasActiveTrip,
     movementStatus,
+    richContentEnabled,
     speedKmh,
+    tripDistanceKm,
+    tripStartedAt,
   });
   if (!force && content.key === lastVisibleKey) {
     return false;

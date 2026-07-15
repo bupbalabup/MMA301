@@ -32,7 +32,7 @@ export default function SettingsListItem({
       <View style={styles.textWrap}>
         <Text
           style={[styles.title, destructive && styles.dangerText]}
-          numberOfLines={1}
+          numberOfLines={2}
         >
           {title}
         </Text>

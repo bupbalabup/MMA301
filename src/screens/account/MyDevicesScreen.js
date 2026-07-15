@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   ColorPickerModal,
   PrimaryButton,
-  SecondaryButton,
   SurfaceCard,
 } from '../../components/ui';
 import { useAuth, useDevice } from '../../contexts';
@@ -33,10 +32,10 @@ export default function MyDevicesScreen() {
   const { user } = useAuth();
   const {
     devices,
+    loading,
     localDeviceId,
     localDeviceName,
     refreshDevices,
-    selectedDevice,
     setLocalDeviceName,
   } = useDevice();
   const [drafts, setDrafts] = useState({});
@@ -109,7 +108,7 @@ export default function MyDevicesScreen() {
           action: SECURITY_ACTIONS.RENAME_DEVICE,
           deviceId: localDeviceId,
           deviceName: localDeviceName,
-          platform: selectedDevice?.platform,
+          platform: Platform.OS,
           targetDeviceId: device.deviceId,
           targetDeviceName: trimmedName,
         });
@@ -120,7 +119,7 @@ export default function MyDevicesScreen() {
           action: SECURITY_ACTIONS.UPDATE_DEVICE_MARKER,
           deviceId: localDeviceId,
           deviceName: localDeviceName,
-          platform: selectedDevice?.platform,
+          platform: Platform.OS,
           targetDeviceId: device.deviceId,
           targetDeviceName: trimmedName,
         });
@@ -142,14 +141,19 @@ export default function MyDevicesScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Thiết bị của tôi</Text>
         <Text style={styles.description}>
           Đổi tên và màu hiển thị trên bản đồ.
         </Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {visibleDevices.length === 0 ? (
+        {loading && visibleDevices.length === 0 ? (
+          <SurfaceCard style={styles.emptyCard}>
+            <Text style={styles.emptyText}>Đang tải thiết bị...</Text>
+          </SurfaceCard>
+        ) : null}
+
+        {!loading && visibleDevices.length === 0 ? (
           <SurfaceCard style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Chưa có thiết bị</Text>
             <Text style={styles.emptyText}>
@@ -174,6 +178,7 @@ export default function MyDevicesScreen() {
               <Text style={styles.cardSectionTitle}>THÔNG TIN CHUNG</Text>
               <Text style={styles.inputLabel}>Tên thiết bị</Text>
               <TextInput
+                accessibilityLabel={`Tên thiết bị ${getDeviceDisplayName(device)}`}
                 onChangeText={(name) => updateDraft(device.deviceId, { name })}
                 style={styles.input}
                 value={draft.name}
@@ -201,11 +206,7 @@ export default function MyDevicesScreen() {
                   <Text style={styles.colorLabel}>Màu hiện tại</Text>
                   <Text style={styles.colorValue}>{safeMarkerColor}</Text>
                 </View>
-                <SecondaryButton
-                  label="Đổi màu"
-                  onPress={() => setColorPickerDeviceId(device.deviceId)}
-                  style={styles.colorButton}
-                />
+                <Text style={styles.colorAction}>Mở bảng màu</Text>
               </Pressable>
 
               <PrimaryButton
@@ -244,8 +245,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.lg,
   },
-  colorButton: {
-    minWidth: 118,
+  colorAction: {
+    ...typography.button,
+    color: colors.primary,
   },
   colorLabel: {
     ...typography.label,
@@ -340,9 +342,5 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  title: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
 });

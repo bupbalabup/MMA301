@@ -32,7 +32,7 @@ function SpeedHero({ isLocal, lastUpdateMs, maxSpeedKmh, speedKmh }) {
       </Text>
       {isLocal ? (
         <Text style={styles.speedSub}>
-          Tốc độ max chuyến: {formatSpeed(maxSpeedKmh)}
+          Tốc độ tối đa của chuyến: {formatSpeed(maxSpeedKmh)}
         </Text>
       ) : (
         <Text style={styles.speedSub}>
@@ -188,10 +188,6 @@ export default function LiveTrackingScreen() {
             />
           </View>
           <InfoRow
-            label="Trạng thái chuyển động"
-            value={formatStatus(displayMovementStatus)}
-          />
-          <InfoRow
             label="Kết nối"
             value={formatStatus(displayConnectionStatus)}
           />
@@ -227,12 +223,6 @@ export default function LiveTrackingScreen() {
             label="Cập nhật lúc"
             value={formatLastUpdate(displayLastUpdateMs)}
           />
-          {isViewingLocalDevice ? (
-            <InfoRow
-              label="ID chuyến đang chạy"
-              value={trackingState.activeTripId ?? 'Không có chuyến nào'}
-            />
-          ) : null}
           {displayAddress ? (
             <InfoRow label="Địa chỉ" value={displayAddress} />
           ) : null}

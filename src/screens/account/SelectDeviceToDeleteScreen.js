@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import PasswordConfirmModal from '../../components/security/PasswordConfirmModal';
@@ -21,10 +21,10 @@ export default function SelectDeviceToDeleteScreen() {
   const { confirmPassword, logout, user } = useAuth();
   const {
     devices,
+    loading,
     localDeviceId,
     localDeviceName,
     refreshDevices,
-    selectedDevice,
   } = useDevice();
   const { isTrackingEnabled } = useTracking();
   const [selectedDeleteDevice, setSelectedDeleteDevice] = useState(null);
@@ -46,6 +46,7 @@ export default function SelectDeviceToDeleteScreen() {
 
     if (device.deviceId === localDeviceId && isTrackingEnabled) {
       setError('Hãy tắt theo dõi trước khi xóa thiết bị hiện tại.');
+      setSelectedDeleteDevice(null);
       return;
     }
 
@@ -59,7 +60,7 @@ export default function SelectDeviceToDeleteScreen() {
         action: SECURITY_ACTIONS.DELETE_DEVICE,
         deviceId: localDeviceId,
         deviceName: localDeviceName,
-        platform: selectedDevice?.platform,
+        platform: Platform.OS,
         targetDeviceId: device.deviceId,
         targetDeviceName: getDeviceDisplayName(device),
       });
@@ -75,6 +76,7 @@ export default function SelectDeviceToDeleteScreen() {
       setConfirmVisible(false);
     } catch (deleteError) {
       setConfirmError(deleteError.message ?? 'Không thể xóa thiết bị.');
+      setConfirmVisible(true);
     } finally {
       setConfirmLoading(false);
     }
@@ -111,7 +113,8 @@ export default function SelectDeviceToDeleteScreen() {
             style: 'destructive',
             onPress: () => performDelete(selectedDeleteDevice),
           },
-        ]
+        ],
+        { cancelable: false }
       );
     } catch (deleteError) {
       setConfirmError(deleteError.message ?? 'Không thể xác nhận mật khẩu.');
@@ -125,14 +128,19 @@ export default function SelectDeviceToDeleteScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.md }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Xóa thiết bị</Text>
         <Text style={styles.description}>
           Chỉ chọn thiết bị khi bạn thật sự muốn xóa khỏi tài khoản.
         </Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {visibleDevices.length === 0 ? (
+        {loading && visibleDevices.length === 0 ? (
+          <SurfaceCard style={styles.card}>
+            <Text style={styles.emptyText}>Đang tải thiết bị...</Text>
+          </SurfaceCard>
+        ) : null}
+
+        {!loading && visibleDevices.length === 0 ? (
           <SurfaceCard style={styles.card}>
             <Text style={styles.emptyTitle}>Không có thiết bị</Text>
             <Text style={styles.emptyText}>Thiết bị trong tài khoản sẽ xuất hiện tại đây.</Text>
@@ -243,10 +251,6 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  title: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
   warningText: {
     ...typography.caption,

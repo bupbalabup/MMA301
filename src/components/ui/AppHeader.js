@@ -26,6 +26,7 @@ export default function AppHeader({
       <View style={styles.titleRow}>
         <View style={styles.titleWrap}>
           <Text
+            accessibilityRole="header"
             style={[styles.title, isCompact && styles.compactTitle]}
             numberOfLines={isCompact ? 1 : 2}
           >

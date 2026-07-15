@@ -8,8 +8,10 @@ import {
 } from './locationPermissionService';
 import {
   isAndroidForegroundLocationSupported,
+  isIosBackgroundLocationSupported,
   startAndroidForegroundLocationUpdates,
-  stopAndroidForegroundLocationUpdates,
+  startIosBackgroundLocationUpdates,
+  stopBackgroundLocationUpdates,
   subscribeToLocationTask,
 } from './locationTaskService';
 
@@ -102,6 +104,41 @@ class GpsEngine {
       );
     }
 
+    if (Platform.OS === 'ios') {
+      if (isIosBackgroundLocationSupported()) {
+        const backgroundPermission =
+          await Location.getBackgroundPermissionsAsync();
+
+        if (backgroundPermission.granted) {
+          this.locationTaskSubscription = subscribeToLocationTask((location) => {
+            this.notify(location);
+          });
+
+          try {
+            await startIosBackgroundLocationUpdates(watchOptions);
+            this.isWatching = true;
+            this.foregroundServiceActive = false;
+            return;
+          } catch (error) {
+            this.locationTaskSubscription();
+            this.locationTaskSubscription = null;
+            console.warn(
+              'Failed to start iOS background location. Falling back to foreground-only GPS watching.',
+              error
+            );
+          }
+        } else {
+          console.warn(
+            'iOS Always location permission is not granted. Falling back to foreground-only GPS watching.'
+          );
+        }
+      } else {
+        console.warn(
+          'iOS background location is not available in Expo Go. Falling back to foreground-only GPS watching.'
+        );
+      }
+    }
+
     this.watchSubscription = await Location.watchPositionAsync(
       watchOptions,
       (location) => {
@@ -114,7 +151,7 @@ class GpsEngine {
   }
 
   async stopWatching() {
-    await stopAndroidForegroundLocationUpdates();
+    await stopBackgroundLocationUpdates();
 
     if (this.locationTaskSubscription) {
       this.locationTaskSubscription();

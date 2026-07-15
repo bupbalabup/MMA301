@@ -18,7 +18,6 @@ import {
 } from '../../constants/tracking';
 import {
   calculateDistanceKm,
-  calculateSpeedKmh,
   normalizeLocationToPoint,
 } from '../../utils/geo';
 import { getTodayDateKey } from '../../utils/date';
@@ -38,11 +37,13 @@ import {
   resetLiveTrackingNotificationCache,
   updateLiveTrackingForegroundNotification,
 } from './liveTrackingNotificationService';
+import { loadLiveTrackingNotificationPreference } from './liveTrackingPreferenceService';
 import {
   clearTrackingTaskState,
   loadTrackingTaskState,
   saveTrackingTaskState,
 } from './trackingTaskStateService';
+import { resolveLocationSpeed } from './speedProcessor';
 
 const METERS_PER_KILOMETER = 1000;
 const CONNECTION_STATUS = {
@@ -54,6 +55,7 @@ const STOPPED_DURATION_TICK_MS = 1000;
 const notificationPresentation = {
   deviceName: null,
   isNetworkOnline: true,
+  richContentEnabled: true,
 };
 
 const state = {
@@ -79,6 +81,7 @@ const state = {
   lastMeaningfulGpsPoint: null,
   lastGpsAt: null,
   pendingSpikePoints: [],
+  recentSpeedSamplesKmh: [],
   isCompletingTrip: false,
 };
 
@@ -107,8 +110,11 @@ function buildTaskStateSnapshot() {
     movementStatus: state.movementStatus,
     notificationDeviceName: notificationPresentation.deviceName,
     notificationIsNetworkOnline: notificationPresentation.isNetworkOnline,
+    notificationRichContentEnabled:
+      notificationPresentation.richContentEnabled,
     parkingCandidateStartedAt: state.parkingCandidateStartedAt,
     pendingSpikePoints: state.pendingSpikePoints,
+    recentSpeedSamplesKmh: state.recentSpeedSamplesKmh,
     startedAt: state.startedAt,
     stoppedDurationMs: state.stoppedDurationMs,
     stoppedSince: state.stoppedSince,
@@ -149,6 +155,10 @@ async function restoreTaskStateIfNeeded() {
     typeof snapshot.notificationIsNetworkOnline === 'boolean'
       ? snapshot.notificationIsNetworkOnline
       : notificationPresentation.isNetworkOnline;
+  notificationPresentation.richContentEnabled =
+    typeof snapshot.notificationRichContentEnabled === 'boolean'
+      ? snapshot.notificationRichContentEnabled
+      : notificationPresentation.richContentEnabled;
 
   if (__DEV__) {
     console.log('[BG_PROCESSOR] restored persisted context', {
@@ -163,10 +173,16 @@ async function restoreTaskStateIfNeeded() {
 }
 
 function logLifecycle(action, reason) {
-  console.log(`[TrackingEngine] ${action} reason: ${reason}`);
+  if (__DEV__) {
+    console.log(`[TrackingEngine] ${action} reason: ${reason}`);
+  }
 }
 
 function logStatusChanges(previousState, nextState) {
+  if (!__DEV__) {
+    return;
+  }
+
   if (
     nextState.movementStatus &&
     nextState.movementStatus !== previousState.movementStatus
@@ -245,9 +261,14 @@ function getNotificationConnectionStatus() {
 function getNotificationContent() {
   return buildLiveTrackingNotificationContent({
     connectionStatus: getNotificationConnectionStatus(),
+    currentTimestamp: Date.now(),
     deviceName: notificationPresentation.deviceName,
+    hasActiveTrip: Boolean(state.activeTripId),
     movementStatus: state.movementStatus,
+    richContentEnabled: notificationPresentation.richContentEnabled,
     speedKmh: state.currentSpeedKmh,
+    tripDistanceKm: state.activeTrip?.totalDistanceKm,
+    tripStartedAt: state.startedAt,
   });
 }
 
@@ -258,10 +279,15 @@ function refreshForegroundNotification({ force = false } = {}) {
 
   updateLiveTrackingForegroundNotification({
     connectionStatus: getNotificationConnectionStatus(),
+    currentTimestamp: Date.now(),
     deviceName: notificationPresentation.deviceName,
     force,
+    hasActiveTrip: Boolean(state.activeTripId),
     movementStatus: state.movementStatus,
+    richContentEnabled: notificationPresentation.richContentEnabled,
     speedKmh: state.currentSpeedKmh,
+    tripDistanceKm: state.activeTrip?.totalDistanceKm,
+    tripStartedAt: state.startedAt,
   }).catch((error) => {
     console.warn('Failed to update live tracking notification.', error);
   });
@@ -379,7 +405,11 @@ function logRejectedGpsPoint({
   reason,
   rawSpeedKmh,
 }) {
-  console.log('[TrackingEngine] GPS point rejected', {
+  if (!__DEV__) {
+    return;
+  }
+
+  console.log('[SPEED_REJECT]', {
     reason,
     rawSpeedKmh,
     distanceMeters,
@@ -600,6 +630,7 @@ function validateGpsPointCandidate(currentPoint, previousAcceptedPoint) {
 export function configureTrackingNotification({
   deviceName,
   isNetworkOnline,
+  richContentEnabled,
 } = {}) {
   let shouldRefresh = false;
 
@@ -613,6 +644,14 @@ export function configureTrackingNotification({
     isNetworkOnline !== notificationPresentation.isNetworkOnline
   ) {
     notificationPresentation.isNetworkOnline = isNetworkOnline;
+    shouldRefresh = true;
+  }
+
+  if (
+    typeof richContentEnabled === 'boolean' &&
+    richContentEnabled !== notificationPresentation.richContentEnabled
+  ) {
+    notificationPresentation.richContentEnabled = richContentEnabled;
     shouldRefresh = true;
   }
 
@@ -811,11 +850,33 @@ async function handleLocationUpdate(location) {
 
   const pointWithoutSpeed = normalizeLocationToPoint(location);
   const timestamp = pointWithoutSpeed.timestamp;
-  const rawSpeedKmh = calculateSpeedKmh(state.lastGpsPoint, pointWithoutSpeed);
+  const speedResult = resolveLocationSpeed({
+    currentPoint: pointWithoutSpeed,
+    location,
+    previousPoint: state.lastGpsPoint,
+    recentSpeedSamplesKmh: state.recentSpeedSamplesKmh,
+  });
+
+  if (!speedResult.accepted) {
+    logRejectedGpsPoint({
+      accuracy: pointWithoutSpeed.accuracy,
+      distanceMeters: state.lastGpsPoint
+        ? getDistanceMeters(state.lastGpsPoint, pointWithoutSpeed)
+        : 0,
+      elapsedTimeMs: state.lastGpsPoint
+        ? pointWithoutSpeed.timestamp - state.lastGpsPoint.timestamp
+        : 0,
+      reason: speedResult.reason,
+      rawSpeedKmh: speedResult.coordinateSpeedKmh,
+    });
+    return;
+  }
+
+  const rawSpeedKmh = speedResult.coordinateSpeedKmh;
   const currentPoint = {
     ...pointWithoutSpeed,
     rawSpeedKmh,
-    speedKmh: rawSpeedKmh,
+    speedKmh: speedResult.speedKmh,
   };
 
   if (
@@ -855,12 +916,28 @@ async function handleLocationUpdate(location) {
   }
 
   if (__DEV__) {
-    console.log('[BG_PROCESSOR] point accepted', {
+    console.log('[SPEED_ACCEPT]', {
+      accuracyMeters: currentPoint.accuracy,
+      canonicalSpeedKmh: Number(currentPoint.speedKmh.toFixed(1)),
+      coordinateSpeedKmh: Number(rawSpeedKmh.toFixed(1)),
+      elapsedTimeMs: speedResult.elapsedTimeMs,
+      nativeSpeedKmh: Number.isFinite(speedResult.nativeSpeedKmh)
+        ? Number(speedResult.nativeSpeedKmh.toFixed(1))
+        : null,
+      nativeSpeedMetersPerSecond: Number.isFinite(
+        speedResult.nativeSpeedMetersPerSecond
+      )
+        ? Number(speedResult.nativeSpeedMetersPerSecond.toFixed(2))
+        : null,
+      source: speedResult.source,
       timestamp: currentPoint.timestamp,
     });
   }
 
-  setState({ lastGpsAt: currentPoint.timestamp });
+  setState({
+    lastGpsAt: currentPoint.timestamp,
+    recentSpeedSamplesKmh: speedResult.nextSpeedSamplesKmh,
+  });
 
   if (!state.lastParkingLocation) {
     setState({ lastParkingLocation: currentPoint });
@@ -1027,9 +1104,13 @@ function enqueueBackgroundLocation(location) {
 registerBackgroundLocationProcessor(enqueueBackgroundLocation);
 
 export async function initialize({ uid, deviceId }, reason = 'context ready') {
-  console.log(
-    `[TrackingEngine] initialize reason: ${reason}, uid: ${uid ?? 'missing'}, deviceId: ${deviceId ?? 'missing'}`
-  );
+  if (__DEV__) {
+    console.log('[TrackingEngine] initialize', {
+      deviceContext: deviceId ? 'present' : 'missing',
+      reason,
+      userContext: uid ? 'present' : 'missing',
+    });
+  }
 
   if (!uid || !deviceId) {
     if (state.isEnabled) {
@@ -1050,6 +1131,7 @@ export async function initialize({ uid, deviceId }, reason = 'context ready') {
       stoppedDurationMs: 0,
       stoppedSince: null,
       pendingSpikePoints: [],
+      recentSpeedSamplesKmh: [],
       parkingCandidateStartedAt: null,
       lastMeaningfulGpsPoint: null,
       isCompletingTrip: false,
@@ -1090,6 +1172,7 @@ export async function initialize({ uid, deviceId }, reason = 'context ready') {
     lastMeaningfulGpsPoint: null,
     lastGpsAt: null,
     pendingSpikePoints: [],
+    recentSpeedSamplesKmh: [],
     isCompletingTrip: false,
   });
 
@@ -1107,6 +1190,15 @@ export async function enableTracking(reason = 'auto tracking enabled') {
   }
 
   logLifecycle('enable', reason);
+
+  try {
+    notificationPresentation.richContentEnabled =
+      await loadLiveTrackingNotificationPreference();
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('Failed to restore live notification preference.', error);
+    }
+  }
 
   const currentDateKey = getTodayDateKey();
   if (state.todayDateKey !== currentDateKey) {
@@ -1214,6 +1306,7 @@ export async function disableTracking(reason = 'explicit user action') {
       parkingCandidateStartedAt: null,
       lastMeaningfulGpsPoint: null,
       pendingSpikePoints: [],
+      recentSpeedSamplesKmh: [],
       isCompletingTrip: false,
     });
     await clearTrackingTaskState();
@@ -1246,6 +1339,7 @@ export async function shutdown(reason = 'provider unmounted') {
     lastMeaningfulGpsPoint: null,
     lastGpsAt: null,
     pendingSpikePoints: [],
+    recentSpeedSamplesKmh: [],
     isCompletingTrip: false,
   });
 

@@ -12,6 +12,7 @@ export const MainRoutes = {
   Account: 'Account',
   ActivityLog: 'ActivityLog',
   ChangePassword: 'ChangePassword',
+  DeleteAccount: 'DeleteAccount',
   LiveTracking: 'LiveTracking',
   MyDevices: 'MyDevices',
   NotificationPreferences: 'NotificationPreferences',

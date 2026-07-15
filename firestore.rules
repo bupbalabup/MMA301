@@ -1,0 +1,77 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function validUserDocument(uid) {
+      return request.resource.data.uid == uid;
+    }
+
+    function validDeviceDocument(uid, deviceId) {
+      return request.resource.data.userId == uid
+        && request.resource.data.deviceId == deviceId;
+    }
+
+    function validLiveLocation(uid, deviceId) {
+      return request.resource.data.userId == uid
+        && request.resource.data.deviceId == deviceId
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number;
+    }
+
+    function validTripSummary(uid, deviceId, tripId) {
+      return request.resource.data.userId == uid
+        && request.resource.data.deviceId == deviceId
+        && request.resource.data.tripId == tripId;
+    }
+
+    match /users/{uid} {
+      allow read, delete: if ownsUser(uid);
+      allow create, update: if ownsUser(uid) && validUserDocument(uid);
+
+      match /securityLogs/{logId} {
+        allow read, delete: if ownsUser(uid);
+        allow create: if ownsUser(uid)
+          && request.resource.data.action is string;
+        allow update: if false;
+      }
+
+      match /devices/{deviceId} {
+        allow read, delete: if ownsUser(uid);
+        allow create, update: if ownsUser(uid)
+          && validDeviceDocument(uid, deviceId);
+
+        match /liveLocation/{locationId} {
+          allow read, delete: if ownsUser(uid);
+          allow create, update: if ownsUser(uid)
+            && locationId == 'current'
+            && validLiveLocation(uid, deviceId);
+        }
+
+        match /tripSummaries/{tripId} {
+          allow read, delete: if ownsUser(uid);
+          allow create, update: if ownsUser(uid)
+            && validTripSummary(uid, deviceId, tripId);
+
+          match /gpsChunks/{chunkId} {
+            allow read, delete: if ownsUser(uid);
+            allow create, update: if ownsUser(uid)
+              && request.resource.data.chunkIndex is int
+              && request.resource.data.points is list;
+          }
+        }
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

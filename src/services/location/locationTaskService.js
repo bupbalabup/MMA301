@@ -49,13 +49,18 @@ TaskManager.defineTask(
 );
 
 function buildTaskOptions(options = {}, foregroundService) {
-  return {
+  const taskOptions = {
     accuracy: Location.Accuracy.Highest,
     timeInterval: 1000,
     distanceInterval: 0,
     ...options,
-    foregroundService,
   };
+
+  if (foregroundService) {
+    taskOptions.foregroundService = foregroundService;
+  }
+
+  return taskOptions;
 }
 
 export function subscribeToLocationTask(callback) {
@@ -78,6 +83,10 @@ export function registerBackgroundLocationProcessor(callback) {
 
 export function isAndroidForegroundLocationSupported() {
   return Platform.OS === 'android' && !isRunningInExpoGo();
+}
+
+export function isIosBackgroundLocationSupported() {
+  return Platform.OS === 'ios' && !isRunningInExpoGo();
 }
 
 export async function startAndroidForegroundLocationUpdates(
@@ -121,8 +130,26 @@ export async function updateAndroidForegroundServiceNotification(
   return true;
 }
 
-export async function stopAndroidForegroundLocationUpdates() {
-  if (Platform.OS !== 'android') {
+export async function startIosBackgroundLocationUpdates(options = {}) {
+  if (!isIosBackgroundLocationSupported()) {
+    throw new Error(
+      'iOS background location requires a Development Build or installed app.'
+    );
+  }
+
+  await Location.startLocationUpdatesAsync(
+    LIVE_TRACKING_NOTIFICATION.TASK_NAME,
+    buildTaskOptions({
+      activityType: Location.ActivityType.OtherNavigation,
+      pausesUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+      ...options,
+    })
+  );
+}
+
+export async function stopBackgroundLocationUpdates() {
+  if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
     return;
   }
 
@@ -137,7 +164,7 @@ export async function stopAndroidForegroundLocationUpdates() {
       );
     }
   } catch (error) {
-    console.warn('Failed to stop Android foreground location updates.', error);
+    console.warn('Failed to stop background location updates.', error);
   } finally {
     lastForegroundService = null;
   }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import PasswordConfirmModal from '../../components/security/PasswordConfirmModal';
@@ -10,7 +10,7 @@ import {
   revokeDeviceSession,
   SECURITY_ACTIONS,
 } from '../../services/firebase/accountSecurityService';
-import { colors, radius, spacing, typography } from '../../theme';
+import { colors, spacing, typography } from '../../theme';
 import {
   formatTimestampValue,
   getDeviceDisplayName,
@@ -23,10 +23,10 @@ export default function SelectSessionToLogoutScreen() {
   const { confirmPassword, logout, user } = useAuth();
   const {
     devices,
+    loading,
     localDeviceId,
     localDeviceName,
     refreshDevices,
-    selectedDevice,
   } = useDevice();
   const [selectedSession, setSelectedSession] = useState(null);
   const [confirmVisible, setConfirmVisible] = useState(false);
@@ -35,7 +35,9 @@ export default function SelectSessionToLogoutScreen() {
   const [message, setMessage] = useState('');
 
   const visibleDevices = useMemo(() => {
-    return devices.filter((device) => device.status !== 'deleted');
+    return devices.filter((device) => {
+      return device.status !== 'deleted' && device.sessionStatus !== 'revoked';
+    });
   }, [devices]);
 
   function beginLogout(device) {
@@ -48,7 +50,11 @@ export default function SelectSessionToLogoutScreen() {
         'Đăng xuất thiết bị hiện tại',
         'Bạn đang chọn phiên hiện tại. Sau khi xác nhận, thiết bị này cũng sẽ đăng xuất.',
         [
-          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Hủy',
+            style: 'cancel',
+            onPress: () => setSelectedSession(null),
+          },
           { text: 'Tiếp tục', onPress: () => setConfirmVisible(true) },
         ]
       );
@@ -65,7 +71,7 @@ export default function SelectSessionToLogoutScreen() {
         action: SECURITY_ACTIONS.KICK_DEVICE,
         deviceId: localDeviceId,
         deviceName: localDeviceName,
-        platform: selectedDevice?.platform,
+        platform: Platform.OS,
         targetDeviceId: device.deviceId,
         targetDeviceName: getDeviceDisplayName(device),
       });
@@ -81,6 +87,7 @@ export default function SelectSessionToLogoutScreen() {
       setSelectedSession(null);
     } catch (error) {
       setConfirmError(error.message ?? 'Không thể đăng xuất phiên đã chọn.');
+      setConfirmVisible(true);
     } finally {
       setConfirmLoading(false);
     }
@@ -117,7 +124,8 @@ export default function SelectSessionToLogoutScreen() {
             style: 'destructive',
             onPress: () => performRevoke(selectedSession),
           },
-        ]
+        ],
+        { cancelable: false }
       );
     } catch (error) {
       setConfirmError(error.message ?? 'Không thể xác nhận mật khẩu.');
@@ -131,13 +139,18 @@ export default function SelectSessionToLogoutScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.md }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Đăng xuất một thiết bị</Text>
         <Text style={styles.description}>
           Chọn đúng phiên cần đăng xuất. Thao tác này là yêu cầu đăng xuất ở cấp ứng dụng.
         </Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
 
-        {visibleDevices.length === 0 ? (
+        {loading && visibleDevices.length === 0 ? (
+          <SurfaceCard style={styles.card}>
+            <Text style={styles.emptyText}>Đang tải phiên đăng nhập...</Text>
+          </SurfaceCard>
+        ) : null}
+
+        {!loading && visibleDevices.length === 0 ? (
           <SurfaceCard style={styles.card}>
             <Text style={styles.emptyTitle}>Không có phiên đăng nhập</Text>
             <Text style={styles.emptyText}>Các phiên đăng nhập sẽ xuất hiện tại đây.</Text>
@@ -190,6 +203,9 @@ export default function SelectSessionToLogoutScreen() {
 }
 
 const styles = StyleSheet.create({
+  card: {
+    marginTop: spacing.md,
+  },
   cardHeader: {
     gap: spacing.xs,
     marginBottom: spacing.xs,
@@ -241,9 +257,5 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  title: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
 });

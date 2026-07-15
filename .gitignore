@@ -48,7 +48,7 @@ Thumbs.db
 .expo-home/
 .tool-home/
 .tool-bin/
-
+.codex/
 .agents/
 AGENTS.md
 ARCHITECTURE.md
@@ -59,6 +59,9 @@ FEATURES.md
 PROJECT_SPEC.md
 ROADMAP.md
 UI.md
+ACCOUNT_DELETION.md
+PRIVACY_POLICY.md
+RELEASE_CHECKLIST.md
 
 # package-lock.json
 # app.json

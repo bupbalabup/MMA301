@@ -1,5 +1,6 @@
 ﻿import { useMemo, useState } from 'react';
 import {
+  Alert,
   Linking,
   Platform,
   ScrollView,
@@ -117,6 +118,9 @@ export default function PermissionWizardScreen({ navigation }) {
   const batteryStatus = normalizeBatteryOptimizationStatus(
     setupStatus?.batteryOptimization ?? { checking: refreshing && !setupStatus }
   );
+  const preciseLocationStatus = setupStatus?.foregroundPermission?.ios?.accuracy === 'full'
+    ? { key: 'enabled', label: 'Bật', verified: true }
+    : { key: 'limited', label: 'Độ chính xác giảm', verified: false };
 
   function goNext() {
     setMessage('');
@@ -171,6 +175,15 @@ export default function PermissionWizardScreen({ navigation }) {
     }
   }
 
+  async function performBackgroundRequest() {
+    await runAction(
+      requestBackgroundPermission,
+      isIos
+        ? 'Hãy kiểm tra lại trạng thái sau khi hệ thống trả về ứng dụng. Theo dõi nền iOS cần Development Build và vẫn chờ kiểm thử trên thiết bị thật.'
+        : 'Hãy kiểm tra lại trạng thái sau khi hệ thống trả về ứng dụng. Theo dõi nền trên Android cần Development Build hoặc APK và vẫn chịu giới hạn của hệ điều hành.'
+    );
+  }
+
   async function requestBackground() {
     if (!setupStatus?.foregroundPermission?.granted) {
       setStepIndex(0);
@@ -185,10 +198,19 @@ export default function PermissionWizardScreen({ navigation }) {
       return;
     }
 
-    await runAction(
-      requestBackgroundPermission,
-      'Hãy kiểm tra lại trạng thái sau khi hệ thống trả về ứng dụng. Quyền này chỉ chuẩn bị thiết bị; theo dõi nền chưa được triển khai.'
-    );
+    if (isAndroid) {
+      Alert.alert(
+        'Cho phép vị trí nền',
+        'Track Device thu thập dữ liệu vị trí để ghi lại hành trình, xác định trạng thái di chuyển và cập nhật vị trí thiết bị ngay cả khi ứng dụng không được sử dụng hoặc đang chạy trong nền.',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Tiếp tục', onPress: performBackgroundRequest },
+        ]
+      );
+      return;
+    }
+
+    await performBackgroundRequest();
   }
 
   async function reviewAutoStart() {
@@ -268,6 +290,12 @@ export default function PermissionWizardScreen({ navigation }) {
               ) : null}
               <LabeledStatusRow label="Quyền vị trí" status={foregroundStatus} />
               <LabeledStatusRow label="Dịch vụ vị trí" status={servicesStatus} />
+              {isIos && setupStatus?.foregroundPermission?.granted ? (
+                <LabeledStatusRow
+                  label="Vị trí chính xác"
+                  status={preciseLocationStatus}
+                />
+              ) : null}
               {!setupStatus?.foregroundPermission?.granted && setupStatus?.foregroundPermission?.canAskAgain !== false ? (
                 <PrimaryButton label="Yêu cầu quyền" loading={loading} onPress={requestForeground} style={styles.action} />
               ) : null}
@@ -285,14 +313,16 @@ export default function PermissionWizardScreen({ navigation }) {
             <>
               <Text style={styles.body}>
                 {isIos
-                  ? 'iOS có thể yêu cầu bạn mở Cài đặt để chọn Luôn luôn. Quyền này không có nghĩa là theo dõi nền đã được triển khai.'
-                  : 'Trên Android 11 trở lên, hệ thống có thể mở Cài đặt để bạn chọn Luôn cho phép. Quyền này không có nghĩa là theo dõi nền đã được triển khai.'}
+                  ? 'iOS có thể yêu cầu bạn mở Cài đặt để chọn Luôn luôn. Pipeline nền dùng chung đã được cấu hình cho Development Build nhưng chưa được kiểm thử trên thiết bị iOS thật.'
+                  : 'Trên Android 11 trở lên, hệ thống có thể mở Cài đặt để bạn chọn Luôn cho phép. Theo dõi nền đã được kiểm thử trên Android Development Build, nhưng vẫn cần quyền và thiết lập hệ thống phù hợp.'}
               </Text>
               {isIos && isExpoGo ? (
                 <Text style={styles.notice}>Expo Go không hỗ trợ theo dõi vị trí nền trên iOS. Hãy dùng bản Development Build hoặc bản cài đặt chính thức để kiểm thử.</Text>
               ) : null}
               <StepStatus status={backgroundStatus} />
-              <PrimaryButton label="Yêu cầu quyền" loading={loading} onPress={requestBackground} style={styles.action} />
+              {!setupStatus?.backgroundPermission?.granted && setupStatus?.backgroundPermission?.canAskAgain !== false ? (
+                <PrimaryButton label="Yêu cầu quyền" loading={loading} onPress={requestBackground} style={styles.action} />
+              ) : null}
               {setupStatus?.backgroundPermission?.canAskAgain === false && !setupStatus?.backgroundPermission?.granted ? (
                 <SecondaryButton label="Mở Cài đặt" onPress={() => Linking.openSettings()} style={styles.secondaryAction} />
               ) : null}
@@ -330,18 +360,22 @@ export default function PermissionWizardScreen({ navigation }) {
                 <Text style={styles.notice}>Thông báo foreground service cần Android Development Build hoặc APK cài đặt. Expo Go chỉ dùng để kiểm tra giao diện.</Text>
               ) : null}
               <StepStatus status={isIos ? { label: 'Kiểm tra trong Cài đặt', key: 'manual_check' } : notificationStatus} />
-              {isAndroid ? (
+              {isAndroid && notificationStatus.key === 'denied' ? (
                 <PrimaryButton label="Yêu cầu quyền thông báo" loading={loading} onPress={requestNotifications} style={styles.action} />
-              ) : (
+              ) : null}
+              {isAndroid && notificationStatus.key === 'blocked' ? (
                 <PrimaryButton label="Mở Cài đặt" onPress={() => Linking.openSettings()} style={styles.action} />
-              )}
+              ) : null}
+              {isIos ? (
+                <PrimaryButton label="Mở Cài đặt" onPress={() => Linking.openSettings()} style={styles.action} />
+              ) : null}
               <SecondaryButton label="Tiếp tục" onPress={goNext} style={styles.secondaryAction} />
             </>
           ) : null}
 
           {currentStep.id === 'backgroundGuide' ? (
             <>
-              <Text style={styles.body}>Quyền Luôn luôn chỉ chuẩn bị hệ thống. Theo dõi vị trí nền cần Development Build hoặc bản cài đặt chính thức, cấu hình native và tác vụ nền cấp ứng dụng; các phần này chưa được triển khai.</Text>
+              <Text style={styles.body}>Track Device có thể tiếp tục ghi hành trình khi ứng dụng chạy nền. Tính năng cần quyền Luôn luôn và Development Build hoặc bản cài đặt chính thức; trạng thái runtime trên iOS vẫn chưa được xác nhận.</Text>
               {isExpoGo ? (
                 <Text style={styles.notice}>Expo Go không hỗ trợ theo dõi vị trí nền trên iOS. Hãy dùng bản Development Build hoặc bản cài đặt chính thức để kiểm thử.</Text>
               ) : null}
@@ -351,8 +385,8 @@ export default function PermissionWizardScreen({ navigation }) {
 
           {currentStep.id === 'complete' ? (
             <>
-              <Text style={styles.readyTitle}>Thiết bị đã sẵn sàng cho theo dõi khi ứng dụng đang mở.</Text>
-              <Text style={styles.body}>{isIos ? 'Bạn có thể mở lại hướng dẫn này từ Cài đặt. Theo dõi nền chưa được triển khai và không hoạt động trong Expo Go.' : 'Bạn có thể mở lại hướng dẫn này từ Cài đặt. Theo dõi nền, tự khởi động và trạng thái tối ưu pin vẫn phụ thuộc giới hạn hệ điều hành.'}</Text>
+              <Text style={styles.readyTitle}>{isIos ? 'Quyền theo dõi đã sẵn sàng.' : 'Thiết bị đã sẵn sàng cho theo dõi vị trí.'}</Text>
+              <Text style={styles.body}>{isIos ? 'Bạn có thể mở lại hướng dẫn này từ Cài đặt. Pipeline nền iOS đã được cấu hình tĩnh nhưng chưa được kiểm thử; Expo Go không hỗ trợ kiểm thử tính năng này.' : 'Theo dõi nền đã được kiểm thử trên Android Development Build. Force-stop sẽ dừng ứng dụng; tự khởi động và tối ưu pin vẫn phụ thuộc thiết bị.'}</Text>
               <PrimaryButton label="Hoàn tất" loading={loading} onPress={finishSetup} style={styles.action} />
             </>
           ) : null}

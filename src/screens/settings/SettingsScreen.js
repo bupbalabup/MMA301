@@ -1,4 +1,4 @@
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TrackIcon } from '../../components/icons';
@@ -31,7 +31,7 @@ function Section({ children, icon, title }) {
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { logout, user } = useAuth();
-  const { localDeviceId, localDeviceName, selectedDevice } = useDevice();
+  const { localDeviceId, localDeviceName } = useDevice();
   const { isTrackingEnabled } = useTracking();
 
   function confirmLogout() {
@@ -50,7 +50,7 @@ export default function SettingsScreen({ navigation }) {
                   action: SECURITY_ACTIONS.LOGOUT,
                   deviceId: localDeviceId,
                   deviceName: localDeviceName,
-                  platform: selectedDevice?.platform,
+                  platform: Platform.OS,
                 });
               }
             } catch (error) {
@@ -92,7 +92,7 @@ export default function SettingsScreen({ navigation }) {
           <SettingsListItem
             icon="movement"
             title="Theo dõi vị trí"
-            subtitle="Xem trạng thái và điều khiển theo dõi"
+            subtitle="Xem trạng thái theo dõi hiện tại"
             value={isTrackingEnabled ? 'Đang bật' : 'Đang tắt'}
             onPress={() => navigation.navigate(MainRoutes.LiveTracking)}
           />

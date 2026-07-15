@@ -117,13 +117,13 @@ function DaySummaryCard({ summary }) {
           </Text>
         </View>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryItemLabel}>Tốc độ max</Text>
+          <Text style={styles.summaryItemLabel}>Tốc độ tối đa</Text>
           <Text style={styles.summaryItemValue}>
             {formatSpeed(summary.maxSpeedKmh, { emptyForInvalid: true })}
           </Text>
         </View>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryItemLabel}>Tốc độ TB</Text>
+          <Text style={styles.summaryItemLabel}>Tốc độ trung bình</Text>
           <Text style={styles.summaryItemValue}>
             {formatSpeed(summary.avgSpeedKmh)}
           </Text>

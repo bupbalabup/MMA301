@@ -1,6 +1,6 @@
 export { default as AccountScreen } from './AccountScreen';
-export { default as ActivityLogScreen } from './SecurityLogScreen';
 export { default as ChangePasswordScreen } from './ChangePasswordScreen';
+export { default as DeleteAccountScreen } from './DeleteAccountScreen';
 export { default as MyDevicesScreen } from './MyDevicesScreen';
 export { default as NotificationPreferencesScreen } from './NotificationPreferencesScreen';
 export { default as SecurityLogScreen } from './SecurityLogScreen';

@@ -59,3 +59,14 @@ export function getDatabase() {
 
   return database;
 }
+
+export async function clearTrackingData() {
+  const db = getDatabase();
+
+  await db.withTransactionAsync(async () => {
+    await db.execAsync(`
+      DELETE FROM gps_points;
+      DELETE FROM trips;
+    `);
+  });
+}

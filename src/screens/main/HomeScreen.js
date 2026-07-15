@@ -310,7 +310,7 @@ export default function HomeScreen({ navigation }) {
 
         <Text style={styles.sectionLabel}>THÔNG SỐ</Text>
         <View style={styles.metricsGrid}>
-          <QuickMetric icon="maxSpeed" label="Tốc độ max" value={formatSpeed(displayMaxSpeedKmh, { emptyForInvalid: true })} />
+          <QuickMetric icon="maxSpeed" label="Tốc độ tối đa" value={formatSpeed(displayMaxSpeedKmh, { emptyForInvalid: true })} />
           <QuickMetric icon="stoppedDuration" label="Thời gian dừng" value={Number.isFinite(displayStoppedDurationMs) ? formatStoppedDuration(displayStoppedDurationMs) : 'Chưa có dữ liệu'} />
           {displayConnectionStatus === 'Offline' ? (
             <QuickMetric

@@ -16,7 +16,10 @@
         {
           "androidForegroundServiceIcon": "./src/assets/branding/notification-foreground-icon.png",
           "isAndroidBackgroundLocationEnabled": true,
-          "isAndroidForegroundServiceEnabled": true
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "Track Device sử dụng vị trí để ghi hành trình và cập nhật thiết bị ngay cả khi ứng dụng chạy nền.",
+          "locationWhenInUsePermission": "Track Device sử dụng vị trí để hiển thị thiết bị và ghi hành trình khi bạn dùng ứng dụng."
         }
       ],
       "./plugins/withTrackDeviceBatteryOptimization"
@@ -39,9 +42,15 @@
       "googleServicesFile": "./google-services.json"
     },
     "ios": {
+      "buildNumber": "1",
+      "bundleIdentifier": "com.danghieu.trackcam",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Track Device cần quyền vị trí để hiển thị vị trí thiết bị và ghi lại hành trình khi bạn sử dụng ứng dụng.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Track Device cần quyền vị trí luôn luôn để chuẩn bị theo dõi vị trí khi ứng dụng chạy nền. Tính năng theo dõi nền chỉ hoạt động trong bản cài đặt hỗ trợ."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Track Device sử dụng vị trí để ghi hành trình, xác định trạng thái di chuyển và cập nhật thiết bị ngay cả khi ứng dụng chạy nền.",
+        "NSLocationAlwaysUsageDescription": "Track Device sử dụng vị trí để ghi hành trình và cập nhật thiết bị khi ứng dụng chạy nền.",
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "splash": {

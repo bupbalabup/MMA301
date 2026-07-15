@@ -30,7 +30,6 @@ import {
 
 const PLAYBACK_TICK_MS = 500;
 const PLAYBACK_SPEEDS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
-const MOVING_SPEED_LABEL_THRESHOLD_KMH = 5;
 
 // --- Pure helpers --------------------------------------------------------------
 
@@ -50,13 +49,6 @@ function getDefaultPlaybackSpeed(durationMs) {
   if (durationMs >= 60 * 60 * 1000) return 64;
   if (durationMs >= 10 * 60 * 1000) return 16;
   return 4;
-}
-
-function getPlaybackStatus(point, progressRatio) {
-  if (!point) return 'Đỗ xe';
-  if ((point.speedKmh ?? 0) > MOVING_SPEED_LABEL_THRESHOLD_KMH) return 'Đang di chuyển';
-  if (progressRatio >= 1) return 'Đỗ xe';
-  return 'Tạm dừng';
 }
 
 function findPlaybackPosition(points, targetTimestamp) {
@@ -90,6 +82,22 @@ function createInitialRegion(points) {
     latitudeDelta: points.length > 1 ? 0.02 : 0.01,
     longitudeDelta: points.length > 1 ? 0.02 : 0.01,
   };
+}
+
+function getUniquePlaybackPoints(points) {
+  const seenTimestamps = new Set();
+
+  return (Array.isArray(points) ? points : [])
+    .filter(isValidPoint)
+    .sort((pointA, pointB) => pointA.timestamp - pointB.timestamp)
+    .filter((point) => {
+      if (seenTimestamps.has(point.timestamp)) {
+        return false;
+      }
+
+      seenTimestamps.add(point.timestamp);
+      return true;
+    });
 }
 
 // --- Code-drawn vehicle marker -------------------------------------------------
@@ -128,7 +136,7 @@ export default function PlaybackScreen({ route }) {
   const tripId = route?.params?.tripId;
   const source = route?.params?.source ?? HISTORY_SOURCE.LOCAL;
   const { user } = useAuth();
-  const { devices, localDeviceId, deviceName } = useDevice();
+  const { localDeviceId } = useDevice();
   const deviceId = route?.params?.deviceId ?? localDeviceId;
   const mapRef = useRef(null);
   const progressBarWidthRef = useRef(1);
@@ -143,20 +151,6 @@ export default function PlaybackScreen({ route }) {
   const [playbackOffsetMs, setPlaybackOffsetMs] = useState(0);
   const [hasFitMap, setHasFitMap] = useState(false);
   const [currentMapRegion, setCurrentMapRegion] = useState(null);
-
-  const playbackDeviceName = useMemo(() => {
-    const matchedDevice = devices.find((device) => {
-      return device.deviceId === deviceId || device.id === deviceId;
-    });
-
-    return (
-      matchedDevice?.name ??
-      matchedDevice?.deviceName ??
-      matchedDevice?.platformLabel ??
-      (deviceId === localDeviceId ? deviceName : null) ??
-      'Thiết bị'
-    );
-  }, [deviceId, deviceName, devices, localDeviceId]);
 
   // -- Derived values --
   const playbackTiming = useMemo(() => {
@@ -187,8 +181,6 @@ export default function PlaybackScreen({ route }) {
   const isPlaybackAtEnd = progressRatio >= 1;
 
   const initialRegion = useMemo(() => createInitialRegion(gpsPoints), [gpsPoints]);
-  const playbackStatus = getPlaybackStatus(currentPoint, progressRatio);
-
   // -- Data loading --
   const loadPlayback = useCallback(async () => {
     const requestId = loadRequestIdRef.current + 1;
@@ -217,9 +209,7 @@ export default function PlaybackScreen({ route }) {
         return;
       }
 
-      const validPoints = (Array.isArray(data.gpsPoints) ? data.gpsPoints : [])
-        .filter(isValidPoint)
-        .sort((a, b) => a.timestamp - b.timestamp);
+      const validPoints = getUniquePlaybackPoints(data.gpsPoints);
 
       const startTime = data.trip?.startTime ?? validPoints[0]?.timestamp ?? 0;
       const endTime = data.trip?.endTime ?? validPoints[validPoints.length - 1]?.timestamp ?? startTime;
@@ -450,33 +440,6 @@ export default function PlaybackScreen({ route }) {
           onLocation={recenterToUser}
           right={spacing.lg}
         />
-      </View>
-
-      <View style={[styles.pointInfoPanel, shadows.card]}>
-        <View style={styles.pointInfoHeader}>
-          <Text style={styles.pointInfoTitle} numberOfLines={1}>
-            {playbackDeviceName}
-          </Text>
-          <Text style={styles.pointInfoStatus}>{playbackStatus}</Text>
-        </View>
-        <View style={styles.pointInfoGrid}>
-          <View style={styles.pointInfoItem}>
-            <Text style={styles.pointInfoLabel}>Tốc độ tại điểm</Text>
-            <Text style={styles.pointInfoValue}>
-              {formatSpeed(currentPoint?.speedKmh, { emptyForInvalid: true })}
-            </Text>
-          </View>
-          <View style={styles.pointInfoItem}>
-            <Text style={styles.pointInfoLabel}>Thời gian tại điểm</Text>
-            <Text style={styles.pointInfoValue}>
-              {formatTimeWithSeconds(currentTimestamp)}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.pointInfoLabel}>Tọa độ tại điểm</Text>
-        <Text style={styles.pointInfoCoordinate} numberOfLines={1} adjustsFontSizeToFit>
-          {formatPointCoordinate(currentPoint)}
-        </Text>
       </View>
 
       {/* -- Controls panel -- */}
@@ -712,61 +675,6 @@ const styles = StyleSheet.create({
     ...typography.metricMedium,
     color: colors.textPrimary,
     marginTop: spacing.xs,
-  },
-  pointInfoCoordinate: {
-    ...typography.caption,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  pointInfoGrid: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  pointInfoHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  pointInfoItem: {
-    flex: 1,
-    minWidth: 0,
-  },
-  pointInfoLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-  },
-  pointInfoPanel: {
-    alignSelf: 'stretch',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.medium,
-    borderWidth: 1,
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    minWidth: 0,
-    padding: spacing.md,
-  },
-  pointInfoStatus: {
-    ...typography.caption,
-    color: colors.primary,
-    flexShrink: 0,
-    fontWeight: '700',
-    marginLeft: spacing.sm,
-  },
-  pointInfoTitle: {
-    ...typography.cardTitle,
-    color: colors.textPrimary,
-    flex: 1,
-    minWidth: 0,
-  },
-  pointInfoValue: {
-    ...typography.caption,
-    color: colors.textPrimary,
-    fontWeight: '700',
-    marginTop: 2,
   },
   primaryButton: {
     alignItems: 'center',

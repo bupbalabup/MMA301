@@ -38,7 +38,6 @@ export default function SecurityLogScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.md }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Nhật ký hoạt động</Text>
         <SecondaryButton
           label={loading ? 'Đang tải...' : 'Làm mới'}
           loading={loading}
@@ -86,9 +85,5 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  title: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
 });

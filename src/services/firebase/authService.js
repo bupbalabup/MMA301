@@ -1,5 +1,6 @@
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   EmailAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
@@ -25,6 +26,10 @@ function createAuthError(action, error) {
     'auth/user-token-expired': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
     'auth/requires-recent-login': 'Vui lòng xác nhận mật khẩu trước khi thực hiện thao tác này.',
   };
+
+  if (!error?.code && error instanceof Error && error.message) {
+    return error;
+  }
 
   return new Error(messages[error?.code] ?? `Không thể ${action}. Vui lòng thử lại.`);
 }
@@ -70,6 +75,20 @@ export async function changeCurrentUserPassword(currentPassword, newPassword) {
     return user;
   } catch (error) {
     throw createAuthError('đổi mật khẩu', error);
+  }
+}
+
+export async function deleteCurrentUserAuthentication() {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error('Không tìm thấy phiên đăng nhập hiện tại.');
+  }
+
+  try {
+    await deleteUser(user);
+  } catch (error) {
+    throw createAuthError('xóa tài khoản đăng nhập', error);
   }
 }
 

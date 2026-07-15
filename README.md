@@ -17,7 +17,9 @@ Track Device tập trung vào các nhu cầu chính:
 - Đồng bộ hành trình đã hoàn thành lên Firestore để xem từ thiết bị khác.
 - Phát lại hành trình bằng bản đồ.
 
-Ứng dụng ưu tiên Android, đồng thời có cấu hình và một số luồng giao diện cho iOS. Android Development Build/APK đã xác nhận foreground service, thông báo theo dõi và tracking nền; Expo Go không phải môi trường acceptance cho các hành vi native này. iOS background tracking cần kiểm thử riêng bằng iOS Development Build.
+Ứng dụng ưu tiên Android. Mục tiêu phân phối hiện tại là **APK Android cài trực tiếp**, không phụ thuộc Google Play. Android Development Build/APK đã xác nhận foreground service, thông báo theo dõi, tracking nền, lock-screen tracking, ghi SQLite khi offline, khôi phục sau khi mở lại app và đồng bộ lại khi có mạng. Expo Go không phải môi trường acceptance cho các hành vi native này.
+
+iOS chỉ được duy trì ở mức tương thích tĩnh và foreground behavior phù hợp với Expo Go. Kiểm thử background trên iPhone thật cần một Apple Developer account và iOS Development Build trong tương lai; Live Activity và Dynamic Island không thuộc phạm vi hiện tại.
 
 ## Tính Năng
 
@@ -27,6 +29,7 @@ Track Device tập trung vào các nhu cầu chính:
 - Đăng nhập bằng email và mật khẩu.
 - Đăng xuất.
 - Đổi mật khẩu sau khi xác thực lại.
+- Xóa tài khoản bằng xác thực lại mật khẩu, xác nhận phá hủy và dọn dữ liệu thuộc tài khoản hiện tại.
 - Khởi tạo hồ sơ người dùng trên Firestore.
 - Đăng ký thiết bị cục bộ với `localDeviceId` ổn định.
 - Quản lý nhiều thiết bị trong cùng tài khoản.
@@ -35,7 +38,8 @@ Track Device tập trung vào các nhu cầu chính:
 - Live Tracking cho thiết bị hiện tại hoặc thiết bị từ xa được chọn.
 - Fleet Map hiển thị nhiều thiết bị trên một bản đồ.
 - Theo dõi GPS foreground bằng `expo-location`.
-- Tính tốc độ từ tọa độ GPS và timestamp.
+- Ưu tiên vận tốc GNSS `coords.speed`, đổi từ m/s sang km/h đúng một lần; dùng Haversine theo tọa độ/timestamp khi provider không trả vận tốc hợp lệ.
+- Làm mượt tốc độ bằng median cửa sổ ngắn và từ chối fallback/spike bất hợp lý.
 - Lọc điểm GPS bất thường.
 - Phân biệt trạng thái di chuyển, tạm dừng, đỗ xe và mất GPS.
 - Tạo chuyến tự động khi có chuyển động.
@@ -52,7 +56,7 @@ Track Device tập trung vào các nhu cầu chính:
 - Cache AsyncStorage cho danh sách thiết bị và dữ liệu live gần nhất.
 - ConnectivityContext với trạng thái online, offline và checking.
 - Permission Wizard cho Android và iOS.
-- Thông báo foreground service cho tracking trên Android native build.
+- Thông báo foreground service cho tracking trên Android native build; tùy chọn “Thông báo trực tiếp” chỉ chuyển giữa nội dung đầy đủ và nội dung tối thiểu bắt buộc.
 - Android runtime đã xác nhận tracking tiếp tục khi app ở nền/khóa màn hình, offline vẫn ghi SQLite, notification foreground cập nhật và chuyến pending đồng bộ lại sau khi có mạng.
 - Account Center cho bảo mật, phiên đăng nhập và thiết bị.
 - Thiết bị đang đăng nhập ở chế độ chỉ đọc.
@@ -65,7 +69,9 @@ Track Device tập trung vào các nhu cầu chính:
 
 ### Đang Hoàn Thiện
 
-- iOS background tracking chờ runtime acceptance riêng trong iOS Development Build; không được suy ra từ kết quả Android.
+- Bộ xử lý tốc độ GNSS/Haversine đã hoàn thành code và static audit nhưng chưa được đối chiếu với đồng hồ xe ở các dải đứng yên, đi bộ, 20–30 km/h, 60–70 km/h, GPS kém, background, lock screen và offline.
+- Chế độ nội dung đầy đủ/tối thiểu của “Thông báo trực tiếp” cần runtime acceptance lại trên APK production.
+- Hành vi dài hạn trên nhiều Android OEM, mức tiêu thụ pin/bộ nhớ, swipe-away, Auto Start và tối ưu pin vẫn cần kiểm thử bổ sung.
 - Kick thiết bị và đăng xuất tất cả thiết bị đang ở mức client-mediated qua Firestore. Dự án chưa có backend Admin SDK để thu hồi Firebase refresh token toàn cục.
 - Auto Start trên Android không có API kiểm tra chung cho mọi hãng. Ứng dụng chỉ mở cài đặt phù hợp nhất và cho phép người dùng xác nhận thủ công.
 - Kiểm tra tối ưu pin phụ thuộc native build và cần xác nhận trên thiết bị thật.
@@ -86,6 +92,7 @@ Track Device tập trung vào các nhu cầu chính:
 - Cloud Functions.
 - Push notification backend.
 - iOS background runtime acceptance.
+- iOS Live Activity và Dynamic Island.
 
 ## Công Nghệ
 
@@ -205,11 +212,17 @@ Tạo bản preview APK bằng EAS:
 eas build --platform android --profile preview
 ```
 
+Tạo APK mục tiêu để cài trực tiếp:
+
+```bash
+eas build -p android --profile production-apk
+```
+
 ## Build
 
-`eas.json` có profile preview tạo APK nội bộ cho Android. Đây là lựa chọn phù hợp để kiểm thử các phần cần native build như foreground service, thông báo theo dõi và một số quyền Android.
+`eas.json` có profile `preview` tạo APK kiểm thử nội bộ và profile `production-apk` tạo APK cài trực tiếp với EAS environment `production`. Profile hiện tại không cấu hình AAB, EAS Submit hoặc luồng phát hành qua cửa hàng ứng dụng.
 
-Các bản build production cần kiểm tra lại biến môi trường, Google Maps API key, Firebase config và chính sách bảo mật trước khi phát hành.
+Trước khi phân phối APK, cần xác nhận biến môi trường, Google Maps API key, Firebase config, keystore hiện có, Firestore Rules và checklist runtime. Không tạo keystore mới khi build lại nếu EAS đã quản lý signing cho package hiện tại.
 
 ## Biến Môi Trường
 
@@ -225,7 +238,9 @@ EXPO_PUBLIC_FIREBASE_APP_ID=
 GOOGLE_MAPS_ANDROID_API_KEY=
 ```
 
-Google Maps Android key được inject lúc Expo resolve cấu hình build qua `app.config.js` từ biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`. Không commit key thật vào repository. Khi phát hành Android, nên giới hạn API key theo Android package `com.danghieu.trackcam` và SHA-1 certificate; bản phát hành Google Play có thể cần thêm SHA-1 của Play App Signing.
+Google Maps Android key được inject lúc Expo resolve cấu hình build qua `app.config.js` từ biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`. Không commit key thật vào repository. Với APK cài trực tiếp, key phải được giới hạn theo Android package `com.danghieu.trackcam` và SHA-1 của keystore đang ký APK.
+
+`app.config.js` sẽ dừng resolve cấu hình với thông báo `Missing GOOGLE_MAPS_ANDROID_API_KEY environment variable.` nếu key chưa có. Đây là fail-fast có chủ đích để không tạo bản native thiếu Maps manifest key.
 
 ## Quyền Android
 
@@ -264,7 +279,7 @@ Khởi tạo thiết bị cục bộ
 TrackingContext khởi tạo TrackingEngine
 GpsEngine nhận vị trí
 TrackingEngine kiểm tra điểm GPS
-Tính tốc độ từ tọa độ và thời gian
+Chuẩn hóa một tốc độ dùng chung từ GNSS hoặc Haversine fallback
 Lưu điểm hợp lệ vào SQLite
 Cập nhật liveLocation/current lên Firestore nếu có mạng
 Hoàn tất chuyến khi đủ điều kiện đỗ xe
@@ -289,7 +304,7 @@ SQLite là nguồn dữ liệu chính cho lịch sử và playback của thiết
 
 ## Runtime Acceptance Checklist
 
-Android runtime đã được xác nhận cho các luồng chính: tracking chạy nền, khóa màn hình, offline SQLite recording, foreground notification update và reconnect sync lên Firestore. Checklist hồi quy cần giữ lại cho mỗi bản build:
+Android runtime đã được xác nhận cho các luồng chính: tracking chạy nền, khóa màn hình, offline SQLite recording, khôi phục pending state sau khi mở lại app, foreground notification update và reconnect sync lên Firestore. Checklist hồi quy cần giữ lại cho mỗi bản build:
 
 - Không tạo duplicate GPS points khi chuyển foreground/background.
 - Không tạo duplicate active trips khi TaskManager và foreground runtime cùng hoạt động.
@@ -297,27 +312,39 @@ Android runtime đã được xác nhận cho các luồng chính: tracking ch�
 - Chuyển foreground/background không làm mất active trip.
 - Lock-screen tracking tiếp tục cập nhật SQLite và notification.
 - Offline tracking vẫn ghi local trips/gps_points.
+- Đóng/mở lại app khôi phục đúng active/pending state trong giới hạn Android cho phép.
 - Reconnect sync đưa pending local trips lên Firestore.
+- “Thông báo trực tiếp” bật/tắt chỉ đổi nội dung đầy đủ/tối thiểu, không dừng tracking.
 - Logout dừng task, dừng notification và không để orphan tracking state.
 - Disable tracking dừng task, dọn persisted task state và không ghi thêm point.
 - Long-running battery/memory behavior cần soak test trên nhiều thiết bị Android/OEM.
+- So sánh tốc độ với đồng hồ xe trên Android thật sau bản sửa GNSS/fallback; kiểm tra tăng tốc, dừng và GPS nhiễu đô thị.
 - Force-stop dừng background execution cho đến khi người dùng mở lại app.
 - Swipe-away behavior có thể khác nhau theo Android vendor.
-- iOS background tracking chỉ được công bố sau khi kiểm thử bằng iOS Development Build.
+- iOS background runtime nằm ngoài acceptance hiện tại; static compatibility không được dùng làm bằng chứng runtime.
 
 ## Roadmap
 
 Các hướng phát triển tiếp theo bắt đầu từ trạng thái source code hiện tại:
 
 - Kiểm thử dài hạn trên nhiều thiết bị Android để đánh giá pin, bộ nhớ và hành vi OEM khi swipe-away.
-- Kiểm thử iOS background tracking bằng iOS Development Build trước khi công bố hỗ trợ iOS nền.
+- Runtime acceptance lại độ chính xác tốc độ và tốc độ tối đa trên Android thật.
 - Bổ sung backend bảo mật để thu hồi session thật sự.
+- Kiểm thử `firestore.rules` bằng Emulator hoặc Firebase project an toàn rồi deploy có kiểm soát sau khi người dùng phê duyệt.
 - Kiểm tra định kỳ giới hạn Google Maps API key theo package và SHA-1 production.
 - Geofence.
 - Cảnh báo tốc độ.
 - Thống kê đội thiết bị.
 - Quy trình quản lý xe thuê hoặc tài sản di động.
 - Web dashboard.
+
+## Tài Liệu Phân Phối Và Quyền Riêng Tư
+
+- [Chính sách quyền riêng tư](PRIVACY_POLICY.md) mô tả dữ liệu theo source hiện tại; URL công khai không phải điều kiện build APK trong phạm vi này.
+- [Quy trình xóa tài khoản](ACCOUNT_DELETION.md) mô tả flow client-side và giới hạn non-atomic.
+- [Checklist APK Android](RELEASE_CHECKLIST.md) liệt kê build, runtime, security, Maps và kiểm thử trực tiếp trên thiết bị.
+
+Phát hành qua Google Play, TestFlight hoặc App Store có thể được xem xét trong một giai đoạn phân phối tương lai; các tài khoản, biểu mẫu và quy trình cửa hàng không phải release blocker hiện tại.
 
 ## Giấy Phép
 

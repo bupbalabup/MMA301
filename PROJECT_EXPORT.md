@@ -18,6 +18,7 @@ Tài liệu này mô tả trạng thái source code hiện tại của dự án 
 | Vị trí | `expo-location` |
 | Tác vụ nền | `expo-task-manager` |
 | Cache | AsyncStorage |
+| Đích phân phối hiện tại | APK Android cài trực tiếp từ EAS profile `production-apk` |
 
 Track Device là ứng dụng theo dõi vị trí nhiều thiết bị trong cùng một tài khoản Firebase. Thiết bị cục bộ tự ghi GPS, tạo chuyến, lưu SQLite, cập nhật vị trí live lên Firestore và đồng bộ chuyến đã hoàn thành lên cloud. Thiết bị khác cùng tài khoản có thể xem vị trí live, lịch sử đã đồng bộ và playback từ dữ liệu cloud.
 
@@ -233,15 +234,24 @@ Hằng số đáng chú ý:
 | Paused threshold | 30 giây |
 | Parking threshold | 3 phút |
 | Single-point spike threshold | 500 km/h |
+| Fallback speed guard | 320 km/h |
+| Fallback acceleration guard | 45 km/h mỗi giây |
+| Speed median window | 3 mẫu |
 | GPS chunk size | 150 điểm |
 
-Tốc độ được tính bằng công thức:
+Nguồn tốc độ ưu tiên là `location.coords.speed` của GNSS. Expo trả giá trị này theo m/s, do đó processor đổi sang km/h đúng một lần:
+
+```text
+nativeSpeedKmh = coords.speed * 3.6
+```
+
+Khi native speed thiếu, âm hoặc không hợp lệ, processor dùng fallback:
 
 ```text
 speedKmh = distanceKm / (elapsedTimeMs / 3600000)
 ```
 
-Khoảng cách dùng Haversine từ hai tọa độ liên tiếp. App không chỉ dựa vào `location.coords.speed`.
+Khoảng cách fallback dùng Haversine từ hai tọa độ liên tiếp. Median ba mẫu giảm nhiễu một frame; fallback có tốc độ/gia tốc bất hợp lý hoặc lệch lớn so với native speed bị từ chối. Foreground và background gọi cùng processor nên UI, SQLite, Firestore và notification không có công thức riêng.
 
 ## 8. Fleet Map
 
@@ -311,6 +321,7 @@ Cloud playback:
 - Đọc trip summary từ Firestore.
 - Đọc gpsChunks theo `chunkIndex`.
 - Gộp, sắp xếp, lọc điểm không hợp lệ.
+- Loại timestamp trùng trước khi nội suy để tránh đoạn playback có thời lượng bằng 0.
 - Clamp điểm trong khoảng `startTime` đến `endTime`.
 
 Giao diện playback có:
@@ -325,22 +336,26 @@ Giao diện playback có:
 - Thanh seek.
 - Tốc độ phát.
 
+Panel điều khiển là nơi duy nhất hiển thị tốc độ, thời gian và tọa độ tại điểm hiện tại; màn không lặp thêm một card thông tin giống hệt phía trên controls.
+
 ## 11. Thông Báo
 
-Android native build có thể dùng foreground-service notification thông qua Expo Location.
+Android native build dùng foreground-service notification thông qua Expo Location. Notification chỉ đọc local TrackingEngine/TaskManager state và vẫn cập nhật khi offline.
 
-Nội dung thông báo:
+Khi “Thông báo trực tiếp” bật, nội dung có dạng:
 
 ```text
-Track Device - {tên thiết bị}
-{tốc độ} km/h | Trực tuyến | {trạng thái di chuyển}
+Track Device · {tên thiết bị}
+{tốc độ} km/h · {trạng thái di chuyển}
+{quãng đường} · {thời gian} · {trạng thái online/offline}
 ```
 
-Khi mất kết nối:
+Khi mất kết nối hoặc mất GPS, dòng tốc độ dùng “Tốc độ gần nhất”. Khi preference tắt, Android vẫn hiển thị nội dung tối thiểu bắt buộc: “Track Device / Theo dõi vị trí đang hoạt động”. Preference này không tắt GPS, SQLite hoặc sync.
 
 ```text
-Track Device - {tên thiết bị}
-Tốc độ gần nhất {tốc độ} km/h | Mất kết nối | {trạng thái di chuyển}
+Track Device · {tên thiết bị}
+Tốc độ gần nhất {tốc độ} km/h · {trạng thái di chuyển}
+{quãng đường} · {thời gian} · Đang lưu ngoại tuyến
 ```
 
 Giới hạn hiện tại:
@@ -349,6 +364,7 @@ Giới hạn hiện tại:
 - iOS không có notification cố định tương đương Android foreground service.
 - Tap notification chủ yếu mở app theo hành vi nền tảng; điều hướng trực tiếp đến Live Tracking chưa được triển khai.
 - Expo Go không đủ để xác nhận foreground-service notification; Android runtime evidence phải đến từ Development Build hoặc APK.
+- Plugin `expo-location` 19.0.8 cài trong repository không khai báo `androidForegroundServiceIcon`; property hiện có trong app config không chứng minh status-bar icon đã được áp dụng. Cần kiểm tra APK production cuối cùng.
 
 ## 12. Offline
 
@@ -449,6 +465,7 @@ Các màn hình tài khoản đang có:
 - Tuỳ chọn thông báo.
 - Trạng thái đồng bộ.
 - Nhật ký bảo mật.
+- Xóa tài khoản ở màn riêng với password reauthentication và xác nhận cuối.
 
 Các thao tác nguy hiểm như đổi mật khẩu, đăng xuất một thiết bị, xóa thiết bị hoặc đăng xuất tất cả yêu cầu nhập lại mật khẩu. Do chưa có backend Admin SDK, các thao tác phiên thiết bị hiện là cơ chế app-level qua Firestore, không phải thu hồi Firebase refresh token toàn cục.
 
@@ -487,17 +504,19 @@ Các điểm tối ưu hiện có:
 
 ## 19. Giới Hạn Hiện Tại
 
-- Android background tracking, offline SQLite recording, reconnect sync và foreground notification update đã được runtime-verified trên thiết bị Android thật.
-- iOS background tracking chưa được runtime acceptance trong iOS Development Build.
+- Android background tracking, lock-screen tracking, offline SQLite recording, app-restart recovery, reconnect sync và foreground notification update đã được runtime-verified trên thiết bị Android thật.
 - Force-stop dừng background execution cho đến khi app mở lại; swipe-away có thể khác nhau theo Android OEM.
 - Chưa có backend Admin SDK để thu hồi token thật sự.
 - Chưa có Cloud Functions.
 - Auto Start không thể xác minh tự động trên mọi Android vendor.
 - Kiểm tra tối ưu pin cần native build và thiết bị thật.
-- Google Maps Android key được inject lúc build bằng `app.config.js` từ biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`; key thật không được commit.
+- Google Maps Android key được inject lúc build bằng `app.config.js` từ biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`; key thật không được commit. Dynamic config dừng sớm với lỗi rõ ràng nếu biến này thiếu, tránh tạo APK không có Maps manifest key.
 - Chưa có bộ screenshot runtime chính thức.
-- Chưa có iOS background runtime acceptance.
 - Long-running Android soak test trên nhiều OEM vẫn cần thực hiện.
+- Bộ xử lý tốc độ GNSS/Haversine mới chưa được runtime acceptance lại trên xe thật; tốc độ lịch sử ghi trước bản sửa có thể còn sai.
+- Repository có draft `firestore.rules`, Privacy Policy, tài liệu xóa tài khoản và checklist APK Android. Rules chưa được Emulator-test/deploy; thông tin đơn vị vận hành, liên hệ và ngày hiệu lực của tài liệu privacy vẫn cần hoàn thiện trước khi phân phối rộng.
+- iOS location background pipeline chỉ có code/static configuration. Physical-device background acceptance, iOS distribution, Live Activity và Dynamic Island nằm ngoài phạm vi APK Android hiện tại và không phải release blocker.
+- Môi trường local hiện phải có `GOOGLE_MAPS_ANDROID_API_KEY` mới resolve được Expo config; manifest Android đã sinh trước đó không chứng minh key mới đã được inject.
 
 ### Runtime Acceptance Checklist
 
@@ -517,8 +536,11 @@ Các điểm tối ưu hiện có:
 Các hướng phát triển hợp lý tiếp theo:
 
 - Soak test Android dài hạn cho duplicate points/trips/cloud chunks, pin và bộ nhớ.
-- iOS background runtime acceptance bằng iOS Development Build.
+- Road-test bộ xử lý tốc độ GNSS/Haversine với đồng hồ xe và các điều kiện GPS khác nhau.
+- Runtime-test preference notification đầy đủ/tối thiểu trên APK production.
+- Build, cài trực tiếp và chạy checklist acceptance cho EAS profile `production-apk`.
 - Backend bảo mật cho session và thiết bị.
+- Kiểm thử/deploy Firestore Security Rules; bổ sung App Check và CI/emulator tests.
 - Quản lý secret production.
 - Geofence.
 - Cảnh báo tốc độ.
@@ -575,6 +597,7 @@ File quan trọng:
 | `src/navigation/*` | AuthNavigator, AppNavigator, RootNavigator |
 | `src/contexts/*` | State toàn cục |
 | `src/services/tracking/TrackingEngine.js` | Lõi tracking |
+| `src/services/tracking/speedProcessor.js` | Chuẩn hóa GNSS speed, Haversine fallback và lọc spike |
 | `src/services/location/GpsEngine.js` | Adapter Expo Location |
 | `src/services/location/locationTaskService.js` | TaskManager task |
 | `src/services/firebase/*` | Firebase Auth và Firestore |
@@ -585,4 +608,4 @@ File quan trọng:
 
 ## 22. Kết Luận
 
-Track Device hiện là một ứng dụng GPS tracking local-first có nhiều thành phần thực tế: auth, thiết bị, tracking, SQLite, Firestore, Fleet Map, History, Playback, cache offline, permission setup và account/security UI. Android runtime đã xác nhận tracking nền, lock-screen tracking, offline recording, reconnect sync và foreground notification update. Các phần còn cần phát triển hoặc kiểm thử thêm trước production gồm iOS background acceptance, long-running Android soak test trên nhiều OEM và backend bảo mật.
+Track Device hiện là một ứng dụng GPS tracking local-first có auth, quản lý/xóa tài khoản, thiết bị, tracking, SQLite, Firestore, Fleet Map, History, Playback, cache offline, permission setup và account/security UI. Android runtime đã xác nhận tracking nền, lock-screen tracking, offline recording, khôi phục sau khi mở lại app, reconnect sync và foreground notification update. Đích phân phối hiện tại là APK Android cài trực tiếp, không phải cửa hàng ứng dụng. Trước acceptance cuối cần build/cài profile `production-apk`, road-test tốc độ, kiểm tra rich/minimal notification, chạy soak test đa OEM, xác minh Maps manifest và kiểm thử/deploy Firestore Rules. iOS chỉ là static compatibility và không nằm trong điểm hoàn thành release hiện tại.

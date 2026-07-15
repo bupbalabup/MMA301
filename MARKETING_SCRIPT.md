@@ -66,13 +66,13 @@ Sau khi hoàn tất, người dùng vào Dashboard trong tab Trang chủ. Dashbo
 
 ## 6. Demo Tracking
 
-Khi tracking hoạt động, GpsEngine nhận vị trí từ Expo Location. TrackingEngine kiểm tra từng điểm GPS, chuẩn hóa timestamp, tính khoảng cách Haversine giữa hai tọa độ liên tiếp và tính tốc độ theo thời gian.
+Khi tracking hoạt động, GpsEngine nhận vị trí từ Expo Location. TrackingEngine kiểm tra từng điểm GPS và đưa dữ liệu qua cùng một bộ xử lý tốc độ cho cả foreground lẫn background. Ứng dụng ưu tiên vận tốc GNSS do thiết bị trả về, đổi đơn vị đúng một lần; nếu thiết bị không có giá trị hợp lệ thì mới dùng khoảng cách Haversine theo thời gian.
 
 Nếu thiết bị bắt đầu di chuyển, app tự tạo chuyến. Nếu thiết bị dừng trên 30 giây, trạng thái chuyển sang Tạm dừng. Nếu dừng đủ 3 phút, app xác nhận Đỗ xe và hoàn tất chuyến.
 
-Ứng dụng không lấy tốc độ hệ điều hành trả về làm nguồn duy nhất. Tốc độ chính được tính từ tọa độ và timestamp. Các điểm GPS bất thường được từ chối thay vì hiển thị tốc độ bị giới hạn giả.
+Ứng dụng làm mượt một cửa sổ ngắn để giảm spike đơn lẻ và từ chối fallback bất hợp lý thay vì ép về một mức tối đa giả. Bản sửa này cần được đối chiếu lại với đồng hồ xe trên Android thật trước khi công bố độ chính xác.
 
-Trên Android native build, khi tracking đang chạy, app hiển thị foreground-service notification cho thiết bị cục bộ. Thông báo này hiển thị tên thiết bị, tốc độ, trạng thái kết nối và trạng thái di chuyển. Runtime trên thiết bị Android thật đã xác nhận notification vẫn cập nhật khi app ở nền; đây không phải push notification.
+Trên Android native build, khi tracking đang chạy, app hiển thị foreground-service notification cho thiết bị cục bộ. Khi “Thông báo trực tiếp” bật, thông báo hiển thị tốc độ, trạng thái di chuyển, quãng đường và thời gian từ dữ liệu local; khi tắt, Android vẫn giữ thông báo tối thiểu bắt buộc. Runtime trên thiết bị Android thật đã xác nhận notification vẫn cập nhật khi app ở nền và offline; đây không phải push notification.
 
 ## 7. Demo Offline
 
@@ -120,7 +120,7 @@ Người dùng có thể phát, tạm dừng, phát lại, về đầu, đến c
 
 ## 11. Demo Cài Đặt Và Tài Khoản
 
-Settings cho phép đổi tên thiết bị, bật hoặc tắt tracking tự động, kiểm tra quyền, mở lại wizard và truy cập các phần tài khoản.
+Settings là trang điều hướng gọn gồm tài khoản và thiết bị, theo dõi, quyền truy cập, đồng bộ, thông báo, phiên bản và giới thiệu. Các form chỉnh sửa chỉ xuất hiện sau khi người dùng mở đúng màn chuyên trách.
 
 Các màn hình tài khoản gồm:
 
@@ -163,7 +163,7 @@ Trong tương lai, dự án có thể mở rộng:
 - Phân quyền người dùng.
 - Web dashboard.
 - Backend bảo mật với Admin SDK.
-- iOS background tracking sau khi kiểm thử bằng iOS Development Build.
+- iOS background tracking trong một giai đoạn tương lai có Apple Developer account và Development Build trên thiết bị thật.
 
 Những phần này hiện chưa được triển khai trong source code, nên khi demo cần nói rõ là định hướng tương lai.
 
@@ -171,7 +171,7 @@ Những phần này hiện chưa được triển khai trong source code, nên k
 
 Track Device là một ứng dụng GPS tracking local-first, tập trung vào theo dõi nhiều thiết bị, lưu lịch sử hành trình, hỗ trợ offline và đồng bộ cloud.
 
-Dự án đã có nền tảng kỹ thuật quan trọng: Firebase Auth, Firestore, SQLite, TrackingEngine, Fleet Map, History, Playback, Permission Wizard, cache offline và account/security UI. Android runtime đã xác nhận tracking nền, lock-screen tracking, offline recording, reconnect sync và foreground notification update. iOS background tracking vẫn cần kiểm thử riêng bằng iOS Development Build.
+Dự án đã có nền tảng kỹ thuật quan trọng: Firebase Auth, Firestore, SQLite, TrackingEngine, Fleet Map, History, Playback, Permission Wizard, cache offline và account/security UI. Android runtime đã xác nhận tracking nền, lock-screen tracking, offline recording, khôi phục sau khi mở lại app, reconnect sync và foreground notification update. Mục tiêu phân phối hiện tại là APK Android cài trực tiếp; iOS chỉ được đánh giá ở mức tương thích tĩnh.
 
 Em xin cảm ơn thầy cô và các bạn đã lắng nghe. Em sẵn sàng trả lời câu hỏi.
 
@@ -208,10 +208,10 @@ Fleet Map không render Google Map khi offline. App hiển thị trạng thái n
 Dashboard dùng cache gần nhất cho thiết bị và chỉ báo nguồn dữ liệu ngoại tuyến.
 
 11. Tốc độ được tính như thế nào?
-Tốc độ được tính từ khoảng cách Haversine giữa hai tọa độ liên tiếp chia cho thời gian giữa hai điểm.
+Ứng dụng ưu tiên vận tốc GNSS do `Expo Location` trả về, đổi từ m/s sang km/h đúng một lần. Khi giá trị này không hợp lệ, app mới tính fallback bằng khoảng cách Haversine chia cho thời gian.
 
 12. App có dùng `location.coords.speed` không?
-Có thể giữ như dữ liệu phụ, nhưng tốc độ chính trong tracking được tính từ tọa độ và timestamp.
+Có. Đây là nguồn ưu tiên. Foreground và background cùng dùng một processor; median ba mẫu và các guard fallback giúp giảm spike.
 
 13. App xử lý GPS spike như thế nào?
 Điểm GPS bất thường bị từ chối, không lưu vào SQLite và không dùng để cập nhật tốc độ.
@@ -265,7 +265,7 @@ Không. iOS không có foreground-service notification tương đương trong so
 Không đầy đủ. Cần Android Development Build hoặc EAS APK.
 
 30. Tracking nền đã hoàn chỉnh chưa?
-Trên Android, luồng nền đã được xác nhận runtime: app vẫn ghi GPS khi ở nền/khóa màn hình, offline vẫn ghi SQLite và notification vẫn cập nhật. Tuy nhiên force-stop sẽ dừng background execution, swipe-away có thể khác nhau theo hãng Android và iOS chưa được xác nhận bằng Development Build.
+Trên Android, luồng nền đã được xác nhận runtime: app vẫn ghi GPS khi ở nền/khóa màn hình, offline vẫn ghi SQLite và notification vẫn cập nhật. Tuy nhiên force-stop sẽ dừng background execution và swipe-away có thể khác nhau theo hãng Android. iOS background runtime không thuộc phạm vi bản APK Android hiện tại.
 
 31. App có quản lý thiết bị đang đăng nhập không?
 Có màn hình thiết bị đang đăng nhập và cơ chế app-level session flags.
@@ -280,7 +280,7 @@ Có. Người dùng có thể đổi tên thiết bị trong Settings hoặc qu�
 Có. Người dùng có thể đổi màu marker thiết bị trên Fleet Map và mini map bằng bảng chọn màu hoặc mã HEX. Ứng dụng không cho đổi kiểu icon marker và không đổi marker Playback.
 
 35. Có xóa tài khoản không?
-Không. Source hiện tại không có chức năng xóa tài khoản.
+Có. Người dùng mở màn Xóa tài khoản, nhập lại mật khẩu và xác nhận lần cuối. App dừng tracking rồi xóa dữ liệu cloud/local đã biết và Firebase Auth user. Đây là luồng client-side nhiều bước, không phải thao tác atomic; vận hành quy mô lớn vẫn nên có backend quản trị đáng tin cậy.
 
 36. Có xóa lịch sử thiết bị khác không?
 Không. Soft delete thiết bị không đồng nghĩa xóa toàn bộ lịch sử thiết bị khác.
@@ -292,7 +292,7 @@ Có, thông qua `react-native-maps`, chủ yếu cho Fleet Map và Playback.
 Có. Track Device không commit key thật. Google Maps Android key được đưa vào lúc build qua biến môi trường `GOOGLE_MAPS_ANDROID_API_KEY`, và khi phát hành cần giới hạn theo package Android cùng SHA-1 certificate.
 
 39. Dự án phù hợp mở rộng theo hướng nào?
-Geofence, cảnh báo tốc độ, thống kê đội thiết bị, quản lý xe thuê, web dashboard và backend bảo mật.
+Geofence, cảnh báo tốc độ, thống kê đội thiết bị, quản lý xe thuê, web dashboard, backend bảo mật và các kênh phân phối cửa hàng nếu dự án có tài khoản nhà phát triển trong tương lai.
 
 40. Điểm mạnh nhất của dự án là gì?
 Kiến trúc local-first kết hợp Firestore realtime, giúp app vừa ghi được dữ liệu khi offline vừa xem được nhiều thiết bị khi online.

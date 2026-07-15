@@ -102,7 +102,7 @@ function DeviceDetailCard({ expanded, fleetDevice, isInternetOnline }) {
     return (
       <View style={styles.emptyDetail}>
         <Text style={styles.emptyDetailTitle}>Chọn một thiết bị</Text>
-        <Text style={styles.emptyDetailText}>Chạm vào marker để xem thông tin chi tiết.</Text>
+        <Text style={styles.emptyDetailText}>Chạm vào biểu tượng thiết bị để xem thông tin chi tiết.</Text>
       </View>
     );
   }
@@ -147,7 +147,7 @@ function DeviceDetailCard({ expanded, fleetDevice, isInternetOnline }) {
       {expanded ? (
         <>
           <View style={styles.detailGrid}>
-            <PanelMetric icon="maxSpeed" label="Tốc độ max" value={formatSpeed(location.activeTripMaxSpeedKmh, { emptyForInvalid: true })} />
+            <PanelMetric icon="maxSpeed" label="Tốc độ tối đa" value={formatSpeed(location.activeTripMaxSpeedKmh, { emptyForInvalid: true })} />
             <PanelMetric icon="stoppedDuration" label="Thời gian dừng" value={Number.isFinite(location.stoppedDurationMs) ? formatStoppedDuration(location.stoppedDurationMs) : EMPTY_VALUE} />
             <PanelMetric icon="distance" label="Quãng đường hôm nay" value={Number.isFinite(location.todayDistanceKm) ? formatDistance(location.todayDistanceKm) : EMPTY_VALUE} />
           </View>
@@ -353,7 +353,6 @@ export default function FleetMapScreen() {
       </View>
 
       <View
-        {...panelResponder.panHandlers}
         style={[
           styles.bottomPanel,
           shadows.floating,
@@ -361,7 +360,15 @@ export default function FleetMapScreen() {
           { paddingBottom: insets.bottom + spacing.md },
         ]}
       >
-        <View style={styles.sheetHandle} />
+        <View
+          {...panelResponder.panHandlers}
+          accessible
+          accessibilityLabel={panelExpanded ? 'Kéo xuống để thu gọn' : 'Kéo lên để xem thêm'}
+          accessibilityRole="adjustable"
+          style={styles.sheetHandleArea}
+        >
+          <View style={styles.sheetHandle} />
+        </View>
         {hasListenerErrors ? (
           <Text style={styles.listenerWarning}>Một số thiết bị đang hiển thị dữ liệu đã lưu gần nhất.</Text>
         ) : null}
@@ -439,6 +446,7 @@ const styles = StyleSheet.create({
   statusLabel: { ...typography.label, color: colors.textMuted, marginRight: spacing.sm },
   statusLabelRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   statusRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md },
-  sheetHandle: { alignSelf: 'center', backgroundColor: colors.borderStrong, borderRadius: radius.pill, height: 4, marginBottom: spacing.sm, width: 44 },
+  sheetHandle: { backgroundColor: colors.borderStrong, borderRadius: radius.pill, height: 4, width: 44 },
+  sheetHandleArea: { alignItems: 'center', justifyContent: 'center', minHeight: 28 },
   topOverlay: { backgroundColor: colors.surface, borderRadius: radius.medium, left: spacing.lg, maxWidth: '70%', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, position: 'absolute', top: spacing.lg },
 });

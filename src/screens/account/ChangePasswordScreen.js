@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -21,6 +22,7 @@ function PasswordField({ label, onChangeText, value }) {
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        accessibilityLabel={label}
         autoCapitalize="none"
         onChangeText={onChangeText}
         secureTextEntry
@@ -34,7 +36,7 @@ function PasswordField({ label, onChangeText, value }) {
 export default function ChangePasswordScreen() {
   const insets = useSafeAreaInsets();
   const { changePassword, user } = useAuth();
-  const { localDeviceId, localDeviceName, selectedDevice } = useDevice();
+  const { localDeviceId, localDeviceName } = useDevice();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -69,7 +71,7 @@ export default function ChangePasswordScreen() {
           action: SECURITY_ACTIONS.CHANGE_PASSWORD,
           deviceId: localDeviceId,
           deviceName: localDeviceName,
-          platform: selectedDevice?.platform,
+          platform: Platform.OS,
         });
       }
       setCurrentPassword('');
@@ -90,7 +92,6 @@ export default function ChangePasswordScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Đổi mật khẩu</Text>
         <Text style={styles.description}>
           Nhập mật khẩu hiện tại để xác nhận trước khi đặt mật khẩu mới.
         </Text>
@@ -174,9 +175,5 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  title: {
-    ...typography.screenTitle,
-    color: colors.textPrimary,
   },
 });

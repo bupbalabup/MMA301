@@ -1,6 +1,7 @@
 export { auth, db } from './firebaseConfig';
 export {
   changeCurrentUserPassword,
+  deleteCurrentUserAuthentication,
   getCurrentUser,
   loginWithEmail,
   logout,
@@ -9,6 +10,7 @@ export {
   subscribeToAuthChanges,
   updateCurrentUserDisplayName,
 } from './authService';
+export { deleteCurrentAccountData } from './accountDeletionService';
 export {
   createUserProfile,
   ensureUserProfile,

@@ -49,7 +49,7 @@ export function getSecurityActionLabel(action) {
     logout: 'Đăng xuất',
     logout_all: 'Đăng xuất tất cả',
     rename_device: 'Đổi tên thiết bị',
-    update_device_marker: 'Cập nhật màu marker thiết bị',
+    update_device_marker: 'Đổi màu thiết bị trên bản đồ',
   };
 
   return labels[action] ?? 'Hoạt động tài khoản';

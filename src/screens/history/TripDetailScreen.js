@@ -198,11 +198,11 @@ export default function TripDetailScreen({ route }) {
             value={formatDurationHuman(trip.durationMs)}
           />
           <MetricTile
-            label="Tốc độ TB"
+            label="Tốc độ trung bình"
             value={formatSpeed(trip.avgSpeedKmh)}
           />
           <MetricTile
-            label="Tốc độ max"
+            label="Tốc độ tối đa"
             value={formatSpeed(trip.maxSpeedKmh, { emptyForInvalid: true })}
           />
           <MetricTile label="Số điểm GPS" value={`${gpsPointCount ?? 0}`} />

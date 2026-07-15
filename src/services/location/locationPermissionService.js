@@ -5,6 +5,8 @@ function normalizePermissionResponse(permission) {
     status: permission.status,
     granted: permission.granted || permission.status === 'granted',
     canAskAgain: permission.canAskAgain,
+    android: permission.android ?? null,
+    ios: permission.ios ?? null,
   };
 }
 
