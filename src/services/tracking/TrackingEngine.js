@@ -4,22 +4,10 @@ import { updateLiveLocation } from '../firebase/liveLocationService';
 import {
   DEFAULT_GPS_INTERVAL_MS,
   GPS_LOST_TIMEOUT_MS,
-  MAX_ACCEPTABLE_ACCURACY_METERS,
-  MAX_JUMP_DISTANCE_METERS,
-  MIN_VALID_POINT_INTERVAL_MS,
-  MOVING_DISTANCE_THRESHOLD_METERS,
-  MOVING_SPEED_THRESHOLD_KMH,
   PARKING_DURATION_MS,
-  PARKING_RADIUS_METERS,
-  SINGLE_POINT_SPIKE_SPEED_KMH,
-  SPIKE_CONFIRMATION_COUNT,
   TEMPORARY_STOP_DURATION_MS,
   TRACKING_STATUS,
 } from '../../constants/tracking';
-import {
-  calculateDistanceKm,
-  normalizeLocationToPoint,
-} from '../../utils/geo';
 import { getTodayDateKey } from '../../utils/date';
 import {
   addLocationToTrip,
@@ -43,9 +31,9 @@ import {
   loadTrackingTaskState,
   saveTrackingTaskState,
 } from './trackingTaskStateService';
-import { resolveLocationSpeed } from './speedProcessor';
+import { createMotionDetectionState } from './motionDetectionEngine';
+import { processMotionSample } from './motionSampleProcessor';
 
-const METERS_PER_KILOMETER = 1000;
 const CONNECTION_STATUS = {
   ONLINE: 'Online',
   OFFLINE: 'Offline',
@@ -75,12 +63,10 @@ const state = {
   stoppedDurationMs: 0,
   stoppedSince: null,
   lastGpsPoint: null,
-  lastParkingLocation: null,
   lastMeaningfulMovementAt: null,
   parkingCandidateStartedAt: null,
-  lastMeaningfulGpsPoint: null,
   lastGpsAt: null,
-  pendingSpikePoints: [],
+  motionDetectionState: createMotionDetectionState(),
   recentSpeedSamplesKmh: [],
   isCompletingTrip: false,
 };
@@ -104,16 +90,14 @@ function buildTaskStateSnapshot() {
     isInitialized: state.isInitialized,
     lastGpsAt: state.lastGpsAt,
     lastGpsPoint: state.lastGpsPoint,
-    lastMeaningfulGpsPoint: state.lastMeaningfulGpsPoint,
     lastMeaningfulMovementAt: state.lastMeaningfulMovementAt,
-    lastParkingLocation: state.lastParkingLocation,
+    motionDetectionState: state.motionDetectionState,
     movementStatus: state.movementStatus,
     notificationDeviceName: notificationPresentation.deviceName,
     notificationIsNetworkOnline: notificationPresentation.isNetworkOnline,
     notificationRichContentEnabled:
       notificationPresentation.richContentEnabled,
     parkingCandidateStartedAt: state.parkingCandidateStartedAt,
-    pendingSpikePoints: state.pendingSpikePoints,
     recentSpeedSamplesKmh: state.recentSpeedSamplesKmh,
     startedAt: state.startedAt,
     stoppedDurationMs: state.stoppedDurationMs,
@@ -148,6 +132,9 @@ async function restoreTaskStateIfNeeded() {
   Object.assign(state, {
     ...snapshot,
     isCompletingTrip: false,
+    motionDetectionState: createMotionDetectionState(
+      snapshot.motionDetectionState
+    ),
   });
   notificationPresentation.deviceName =
     snapshot.notificationDeviceName ?? notificationPresentation.deviceName;

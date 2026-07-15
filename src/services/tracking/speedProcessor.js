@@ -1,12 +1,7 @@
 import { calculateSpeedKmh } from '../../utils/geo';
+import { MOTION_DETECTION_CONFIG } from '../../constants/tracking';
 
 const METERS_PER_SECOND_TO_KMH = 3.6;
-const MAX_NATIVE_SPEED_KMH = 400;
-const MAX_FALLBACK_SPEED_KMH = 320;
-const MAX_FALLBACK_ACCELERATION_KMH_PER_SECOND = 45;
-const MAX_SPEED_SAMPLE_COUNT = 3;
-const MIN_DIVERGENCE_KMH = 45;
-const MAX_NATIVE_FALLBACK_RATIO = 1.8;
 
 function getMedian(values) {
   const sortedValues = [...values].sort((valueA, valueB) => valueA - valueB);
@@ -38,7 +33,9 @@ function getNativeSpeedKmh(nativeSpeedMetersPerSecond) {
   }
 
   const nativeSpeedKmh = nativeSpeedMetersPerSecond * METERS_PER_SECOND_TO_KMH;
-  return nativeSpeedKmh <= MAX_NATIVE_SPEED_KMH ? nativeSpeedKmh : null;
+  return nativeSpeedKmh <= MOTION_DETECTION_CONFIG.maxNativeSpeedKmh
+    ? nativeSpeedKmh
+    : null;
 }
 
 function getElapsedSeconds(previousPoint, currentPoint) {
@@ -48,36 +45,24 @@ function getElapsedSeconds(previousPoint, currentPoint) {
     : null;
 }
 
-function hasImplausibleFallbackAcceleration({
+function hasImplausibleAcceleration({
   elapsedSeconds,
-  fallbackSpeedKmh,
+  speedKmh,
   previousSpeedKmh,
 }) {
   if (
     !Number.isFinite(elapsedSeconds) ||
-    elapsedSeconds > 5 ||
-    !Number.isFinite(previousSpeedKmh) ||
-    previousSpeedKmh <= 5
+    elapsedSeconds > MOTION_DETECTION_CONFIG.accelerationWindowMs / 1000 ||
+    !Number.isFinite(previousSpeedKmh)
   ) {
     return false;
   }
 
   const accelerationKmhPerSecond =
-    Math.abs(fallbackSpeedKmh - previousSpeedKmh) / elapsedSeconds;
-  return accelerationKmhPerSecond > MAX_FALLBACK_ACCELERATION_KMH_PER_SECOND;
-}
-
-function hasNativeFallbackDivergence(nativeSpeedKmh, fallbackSpeedKmh) {
-  if (!Number.isFinite(nativeSpeedKmh) || !Number.isFinite(fallbackSpeedKmh)) {
-    return false;
-  }
-
-  const differenceKmh = fallbackSpeedKmh - nativeSpeedKmh;
-  const ratio = fallbackSpeedKmh / Math.max(1, nativeSpeedKmh);
-
+    Math.abs(speedKmh - previousSpeedKmh) / elapsedSeconds;
   return (
-    differenceKmh > MIN_DIVERGENCE_KMH &&
-    ratio > MAX_NATIVE_FALLBACK_RATIO
+    accelerationKmhPerSecond >
+    MOTION_DETECTION_CONFIG.maxAccelerationKmhPerSecond
   );
 }
 
@@ -110,13 +95,17 @@ export function resolveLocationSpeed({
     };
   }
 
-  const coordinateSpeedKmh = calculateSpeedKmh(previousPoint, currentPoint);
   const elapsedSeconds = getElapsedSeconds(previousPoint, currentPoint);
   const elapsedTimeMs = currentPoint.timestamp - previousPoint.timestamp;
+  const coordinateSpeedKmh =
+    nativeSpeedKmh == null
+      ? calculateSpeedKmh(previousPoint, currentPoint)
+      : null;
+  const rawSpeedKmh = nativeSpeedKmh ?? coordinateSpeedKmh;
 
   if (
     nativeSpeedKmh == null &&
-    coordinateSpeedKmh > MAX_FALLBACK_SPEED_KMH
+    coordinateSpeedKmh > MOTION_DETECTION_CONFIG.maxFallbackSpeedKmh
   ) {
     return {
       accepted: false,
@@ -124,15 +113,14 @@ export function resolveLocationSpeed({
       elapsedTimeMs,
       nativeSpeedKmh,
       nativeSpeedMetersPerSecond,
-      reason: 'implausible_fallback_speed',
+      reason: 'speed_spike',
     };
   }
 
   if (
-    nativeSpeedKmh == null &&
-    hasImplausibleFallbackAcceleration({
+    hasImplausibleAcceleration({
       elapsedSeconds,
-      fallbackSpeedKmh: coordinateSpeedKmh,
+      speedKmh: rawSpeedKmh,
       previousSpeedKmh: previousPoint.speedKmh,
     })
   ) {
@@ -142,33 +130,17 @@ export function resolveLocationSpeed({
       elapsedTimeMs,
       nativeSpeedKmh,
       nativeSpeedMetersPerSecond,
-      reason: 'implausible_fallback_acceleration',
-    };
-  }
-
-  if (
-    Number.isFinite(elapsedSeconds) &&
-    elapsedSeconds <= 5 &&
-    hasNativeFallbackDivergence(nativeSpeedKmh, coordinateSpeedKmh)
-  ) {
-    return {
-      accepted: false,
-      coordinateSpeedKmh,
-      elapsedTimeMs,
-      nativeSpeedKmh,
-      nativeSpeedMetersPerSecond,
-      reason: 'native_coordinate_speed_divergence',
+      reason: 'speed_spike',
     };
   }
 
   const source = nativeSpeedKmh == null ? 'coordinate_fallback' : 'native_gnss';
-  const rawSpeedKmh = nativeSpeedKmh ?? coordinateSpeedKmh;
   const nextSpeedSamplesKmh = [
     ...recentSpeedSamplesKmh.filter(
       (speedKmh) => Number.isFinite(speedKmh) && speedKmh >= 0
     ),
     rawSpeedKmh,
-  ].slice(-MAX_SPEED_SAMPLE_COUNT);
+  ].slice(-MOTION_DETECTION_CONFIG.speedMedianSampleCount);
 
   return {
     accepted: true,
